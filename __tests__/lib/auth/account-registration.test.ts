@@ -3,8 +3,7 @@ import { validateAccountRegistration } from '@/lib/auth/account-registration';
 
 const validInput = {
   email: 'owner@viepos.test',
-  ownerName: 'Nguyễn Minh Anh',
-  storeName: 'Cà phê Mộc',
+  fullName: 'Nguyễn Minh Anh',
   password: 'password123',
   confirmPassword: 'password123',
   acceptedTerms: true,
@@ -16,6 +15,7 @@ describe('validateAccountRegistration', () => {
 
     expect(result.ok).toBe(true);
     expect(result.account?.email).toBe('owner@viepos.test');
+    expect(result.account?.displayName).toBe('Nguyễn Minh Anh');
     expect(result.account?.role).toBe('STAFF');
     expect(result.account?.status).toBe('PENDING');
   });

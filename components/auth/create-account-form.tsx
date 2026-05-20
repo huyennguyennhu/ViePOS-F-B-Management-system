@@ -9,8 +9,7 @@ import './create-account-form.css';
 
 export function CreateAccountForm() {
   const router = useRouter();
-  const [storeName, setStoreName] = useState('Cà phê Mộc');
-  const [ownerName, setOwnerName] = useState('Nguyễn Minh Anh');
+  const [fullName, setFullName] = useState('Nguyễn Minh Anh');
   const [email, setEmail] = useState('staff@viepos.test');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -28,8 +27,7 @@ export function CreateAccountForm() {
 
     const result = validateAccountRegistration({
       email,
-      ownerName,
-      storeName,
+      fullName,
       password,
       confirmPassword,
       acceptedTerms,
@@ -76,29 +74,15 @@ export function CreateAccountForm() {
       </div>
 
       <label className="field-group">
-        <span>Tên cửa hàng</span>
-        <div className="text-field">
-          <Store aria-hidden="true" size={20} />
-          <input
-            autoComplete="organization"
-            onChange={(event) => setStoreName(event.target.value)}
-            placeholder="Ví dụ: Cà phê Mộc"
-            required
-            value={storeName}
-          />
-        </div>
-      </label>
-
-      <label className="field-group">
-        <span>Tên người quản lý</span>
+        <span>Họ và Tên</span>
         <div className="text-field">
           <UserRound aria-hidden="true" size={20} />
           <input
             autoComplete="name"
-            onChange={(event) => setOwnerName(event.target.value)}
+            onChange={(event) => setFullName(event.target.value)}
             placeholder="Nguyễn Minh Anh"
             required
-            value={ownerName}
+            value={fullName}
           />
         </div>
       </label>

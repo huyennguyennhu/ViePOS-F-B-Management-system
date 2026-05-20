@@ -3,7 +3,6 @@ import type { AppRole, UserStatus } from './auth-roles';
 export interface RegisteredAccount {
   email: string;
   displayName: string;
-  storeName: string;
   role: AppRole;
   status: UserStatus;
   password: string;
@@ -12,8 +11,7 @@ export interface RegisteredAccount {
 
 export interface AccountRegistrationInput {
   email: string;
-  ownerName: string;
-  storeName: string;
+  fullName: string;
   password: string;
   confirmPassword: string;
   acceptedTerms: boolean;
@@ -29,17 +27,15 @@ export const normalizeEmail = (email: string): string => email.trim().toLowerCas
 
 export const validateAccountRegistration = ({
   email,
-  ownerName,
-  storeName,
+  fullName,
   password,
   confirmPassword,
   acceptedTerms,
 }: AccountRegistrationInput): AccountRegistrationResult => {
   const normalizedEmail = normalizeEmail(email);
-  const trimmedOwnerName = ownerName.trim();
-  const trimmedStoreName = storeName.trim();
+  const trimmedFullName = fullName.trim();
 
-  if (!normalizedEmail || !trimmedOwnerName || !trimmedStoreName) {
+  if (!normalizedEmail || !trimmedFullName) {
     return { ok: false, message: 'Vui lòng nhập đầy đủ thông tin.' };
   }
 
@@ -63,8 +59,7 @@ export const validateAccountRegistration = ({
     ok: true,
     account: {
       email: normalizedEmail,
-      displayName: trimmedOwnerName,
-      storeName: trimmedStoreName,
+      displayName: trimmedFullName,
       role: 'STAFF',
       status: 'PENDING',
       password,

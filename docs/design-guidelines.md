@@ -1,6 +1,29 @@
 # ViePOS — Design System & Guidelines
 
-**Source:** Figma VIEPOS-WIREFRAME (fileKey: txxN6issmLkjIG35KXt2ZF)
+**Sources (Figma, ViePOS project):**
+- Brand identity: `KIẾN TẬP` — fileKey `MVf0wa4YxVRJKS2q5992oc` (logo, foundation colors, typography, core components)
+- Wireframes: `VIEPOS-WIREFRAME` — fileKey `txxN6issmLkjIG35KXt2ZF` (screen layouts, component placements)
+
+---
+
+## Brand Foundation
+
+The 4 colors and single typeface below are the **canonical brand identity** for ViePOS. All other tokens in this document (status, neutrals, gradients) are derived from or supplement this foundation.
+
+### Brand Palette (4 colors)
+
+| Role | Hex | Usage |
+|------|-----|-------|
+| **Brand Dark Green** | `#256E05` | Primary brand color — logo, CTA button, headers, primary actions |
+| **Brand Light Green** | `#3CB018` | Secondary brand color — hover states, accents, gradient end |
+| **Off-white** | `#F2F3ED` | Page background, light surfaces |
+| **Black** | `#000000` | Primary text, borders |
+
+### Brand Typeface
+
+**Inter** — single typeface for the entire product. No secondary or display fonts.
+
+Weight scale: Light (300) · Regular (400) · Medium (500) · Semibold (600) · Bold (700).
 
 ---
 
@@ -11,7 +34,7 @@
 |-------|-----|-------|--------------|
 | Brand Dark Green | `#256E05` | Primary action (hover), logo | `--color-brand-dark` |
 | Brand Light Green | `#3CB018` | Hero gradient, secondary | `--color-brand-light` |
-| Action Green | `#349409` | Button default, CTA | `--color-action-primary` |
+| Action Green (CTA) | `#256E05` | Button default, CTA — mapped to Brand Dark Green | `--color-action-primary` |
 
 ### Background & Neutral
 | Token | Hex | Usage | CSS Variable |
@@ -57,7 +80,7 @@ export default {
           light: '#3CB018',
         },
         action: {
-          primary: '#349409',
+          primary: '#256E05', // aliased to brand.dark per brand foundation
         },
         status: {
           success: '#349409',
@@ -92,40 +115,52 @@ export default {
 
 ## Typography Scale
 
-### Font Families
+Per brand foundation: **Inter is the only typeface**. All text — headings, body, buttons, prices, badges — uses Inter with varying weights.
+
+### Font Family
 ```css
 --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
---font-header: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
---font-button: 'Lexend', sans-serif;
---font-accent: 'Poppins', sans-serif;
+```
+
+Self-host via `next/font/google` to avoid CDN latency:
+```typescript
+// app/layout.tsx
+import { Inter } from 'next/font/google';
+const inter = Inter({
+  subsets: ['latin', 'vietnamese'],
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-primary',
+});
 ```
 
 ### Text Styles
 
-| Use Case | Font | Weight | Size | Line Height | Letter Spacing |
-|----------|------|--------|------|-------------|----------------|
-| H1 (Page Title) | SF Pro | Bold | 28px | 1.4 | —0.5px |
-| H2 (Section) | SF Pro | Semibold | 24px | 1.4 | — |
-| H3 (Subsection) | Inter | Bold | 20px | 1.4 | — |
-| Body (Regular) | Inter | Regular | 14px | 1.6 | — |
-| Body (Medium) | Inter | Medium | 14px | 1.6 | — |
-| Button | Lexend | Medium | 14px | 1.2 | — |
-| Label | Inter | Medium | 12px | 1.4 | — |
-| Caption | Inter | Regular | 10px | 1.2 | — |
-| Price | Poppins | Semibold | 16px | 1.2 | — |
-| Status Badge | SF Pro | Semibold | 16px | 1.2 | — |
-| Numpad Label | Inter | Medium | 12px | 1 | — |
-| Input Placeholder | Inter | Regular | 14px | 1.6 | `#CBCBCB` color |
+All rows use Inter; only weight and size vary.
+
+| Use Case | Weight | Size | Line Height | Letter Spacing |
+|----------|--------|------|-------------|----------------|
+| H1 (Page Title) | Bold (700) | 28px | 1.4 | -0.5px |
+| H2 (Section) | Semibold (600) | 24px | 1.4 | — |
+| H3 (Subsection) | Bold (700) | 20px | 1.4 | — |
+| Body (Regular) | Regular (400) | 14px | 1.6 | — |
+| Body (Medium) | Medium (500) | 14px | 1.6 | — |
+| Button | Medium (500) | 14px | 1.2 | — |
+| Label | Medium (500) | 12px | 1.4 | — |
+| Caption | Regular (400) | 10px | 1.2 | — |
+| Price | Semibold (600) | 16px | 1.2 | tabular-nums |
+| Status Badge | Semibold (600) | 16px | 1.2 | — |
+| Numpad Label | Medium (500) | 12px | 1.0 | — |
+| Input Placeholder | Regular (400) | 14px | 1.6 | color `#CBCBCB` |
+| Tagline | Light (300) | 14px | 1.4 | — |
+
+> **Price token tip:** apply Tailwind `tabular-nums` (or CSS `font-variant-numeric: tabular-nums`) on price/total cells so VND digits align column-wise.
 
 ### Tailwind Typography Config
 ```typescript
 export default {
   theme: {
     fontFamily: {
-      primary: ["var(--font-primary)", "system-ui"],
-      header: ["var(--font-header)", "system-ui"],
-      button: ["var(--font-button)", "sans-serif"],
-      accent: ["var(--font-accent)", "sans-serif"],
+      sans: ["var(--font-primary)", "system-ui", "sans-serif"],
     },
     fontSize: {
       xs: '10px',
@@ -391,22 +426,50 @@ borderRadius: {
 
 ## Logo & Branding
 
-### Logo Usage
-- **Light background:** Use `logo.svg` (dark green)
-- **Dark background:** Use `logo-white.svg` (white)
-- **Minimum size:** 48×48px
-- **Clear space:** 8px padding around logo
-- **Placement:** Hero panel (login), sidebar header, footer
+### Logo Marks
 
-### Logo Path
+ViePOS has two logo forms — both derived from a stylized **"V"** shape: an upward-pointing chevron with an arrow-like inner stroke, suggesting forward motion and a checkmark (completion).
+
+| Form | Use | Composition |
+|------|-----|-------------|
+| **Wordmark** | Headers, login hero, marketing | Stylized "V" + lowercase "iePOS" inline |
+| **Logomark** ("V") | App icon, favicon, small UI surfaces, sidebar collapsed state | Standalone "V" chevron, square-aspect |
+
+### Color Variants
+
+| Variant | Asset | Background |
+|---------|-------|------------|
+| Green-on-white | `logo.svg`, `logomark.svg` | Light surfaces (`#F2F3ED`, white) |
+| White-on-green | `logo-white.svg`, `logomark-white.svg` | Brand dark (`#256E05`) or brand gradient hero panel |
+
+### Sizing & Clear Space
+- **Minimum size (wordmark):** 96×24px
+- **Minimum size (logomark):** 24×24px
+- **Clear space:** 1/4 of logo height on all sides (no other elements within this margin)
+- **Do not:** rotate, recolor outside brand greens, distort aspect ratio, place on busy photographic backgrounds
+
+### App Icon
+- **Canvas:** 1024×1024px (iOS), 512×512px (Android adaptive foreground)
+- **Background:** Solid `#256E05` (brand dark green)
+- **Foreground:** White logomark (V), centered, ~60% of canvas
+- **Corner radius:** Platform default (iOS rounds at OS level; Android adaptive uses safe-zone)
+- **Notification badge:** Standard OS red badge — no custom override
+
+### Asset Paths
 ```
-public/images/logo.svg
-public/images/logo-white.svg
-public/images/brand-gradient.svg (hero bg reference)
+public/images/
+├── logo.svg                  # Wordmark, green-on-white
+├── logo-white.svg            # Wordmark, white-on-green
+├── logomark.svg              # V mark, green
+├── logomark-white.svg        # V mark, white
+├── app-icon-1024.png         # App icon, iOS
+├── app-icon-512.png          # App icon, Android adaptive
+├── favicon.ico               # Browser favicon
+└── brand-gradient.svg        # Hero bg reference
 ```
 
 ### Tagline Usage
-"Vừa - Đủ - Tinh Gọn" — right-aligned on hero panel, Lexend Light 14px, white text on brand gradient
+"Vừa - Đủ - Tinh Gọn" — right-aligned on hero panel, Inter Light (300) 14px, white text on brand gradient
 
 ---
 
@@ -449,13 +512,14 @@ export function CartIcon() {
 - **Normal text:** 4.5:1 minimum (large text 3:1)
 - **UI components:** 3:1 minimum
 - **Verified combinations:**
-  - `#256E05` (dark green) on `#FFFFFF` (white) = 8.2:1 ✅
-  - `#349409` (action green) on `#FFFFFF` = 5.1:1 ✅
+  - `#256E05` (brand dark / CTA) on `#FFFFFF` (white) = 8.2:1 ✅
+  - `#256E05` (brand dark) on `#F2F3ED` (bg light) = 7.8:1 ✅
+  - `#3CB018` (brand light) on `#FFFFFF` = 3.6:1 ✅ (large text / UI only)
   - `#878787` (gray-3) on `#F2F3ED` (bg light) = 5.8:1 ✅
 
 ### Focus Management
 - **Focus indicator:** Green outline (2px, offset 2px)
-- **Focus color:** `#349409` (action green)
+- **Focus color:** `#256E05` (brand dark green, via `--color-action-primary`)
 - **All interactive elements:** Must have visible focus state
 - **Hidden from visual focus:** Use `sr-only` (screen-reader-only) class for invisible but keyboard-navigable elements
 
@@ -553,6 +617,10 @@ export function CartIcon() {
 
 ## Unresolved Questions
 
-1. **Font loading:** Should fonts be self-hosted or Google Fonts CDN? Recommend self-host to reduce cold-start latency.
+1. **Status Success color (`#349409`):** Brand foundation only declares 2 greens (`#256E05`, `#3CB018`). `--color-success` currently uses `#349409` as a semantic token (distinct from CTA `--color-action-primary` which is now `#256E05`). Should success badges:
+   - (a) Keep `#349409` as a semantic-only token (current state, slight palette drift), or
+   - (b) Map to `#3CB018` (brand light green) for strict brand compliance?
+   Recommendation: option (b) for consistency — the 1-token saving outweighs the marginal hue difference. Decide before Phase 2 implementation.
 2. **Dark mode:** Any requirement? Deferred; light mode only for MVP.
 3. **Print preview styling:** Should POS print preview match receipt format exactly? Will finalize during Phase 2 implementation.
+4. **Logo source files:** Brand sheet shows logo marks but actual SVG exports are not yet in `public/images/`. Need export pass from Figma `MVf0wa4YxVRJKS2q5992oc` once API rate limit clears, or manual SVG export from designer.
