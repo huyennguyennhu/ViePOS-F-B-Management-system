@@ -4,9 +4,9 @@ Generated from `repomix-output.xml` on 2026-05-20.
 
 ## Current State
 
-**Status:** Auth registration, login, and dashboard RBAC are implemented.
+**Status:** Auth registration, login, dashboard RBAC, and the responsive internal dashboard shell are implemented.
 **Live auth path:** Better Auth + Prisma + app-specific register/login routes.
-**Post-login surface:** `/dashboard` with server-side module filtering.
+**Post-login surface:** `/dashboard` with server-side module filtering, responsive shell navigation, and placeholder module pages.
 **Package manager:** pnpm
 **Main framework:** Next.js 15 (App Router) + React 19 + TypeScript
 
@@ -21,7 +21,13 @@ Generated from `repomix-output.xml` on 2026-05-20.
 | `app/api/app-auth/register/route.ts` | App-specific public registration API |
 | `app/api/app-auth/login/route.ts` | App-specific login API |
 | `app/api/app-auth/logout/route.ts` | App-specific logout API |
-| `app/dashboard/page.tsx` | Authenticated dashboard shell |
+| `components/layout/dashboard-shell.tsx` | Authenticated dashboard shell wrapper |
+| `components/layout/dashboard-shell-client.tsx` | Responsive drawer state and current-route shell composition |
+| `components/layout/dashboard-navigation-items.tsx` | Dashboard nav metadata grouped by visible modules |
+| `components/layout/dashboard-sidebar.tsx` | Responsive sidebar and drawer navigation |
+| `components/layout/dashboard-topbar.tsx` | Topbar, search, user actions, and mobile menu button |
+| `components/layout/dashboard-module-placeholder.tsx` | Shared placeholder surface for shell-only routes |
+| `app/dashboard/page.tsx` | Authenticated dashboard overview placeholder |
 | `app/dashboard/sales/page.tsx` | Sales module |
 | `app/dashboard/orders/page.tsx` | Orders module |
 | `app/dashboard/menu/page.tsx` | Menu module |
@@ -29,6 +35,8 @@ Generated from `repomix-output.xml` on 2026-05-20.
 | `app/dashboard/staff/approvals/page.tsx` | Staff approval module |
 | `app/dashboard/staff/roles/page.tsx` | Staff role-management module |
 | `app/dashboard/settings/page.tsx` | Settings module |
+| `app/dashboard.css` | Route-level shell styling and responsive breakpoints |
+| `e2e/dashboard-shell.spec.ts` | Authenticated Playwright shell regression coverage |
 | `app/admin/page.tsx` | Legacy route redirect to `/dashboard` |
 | `app/pos/page.tsx` | Legacy route redirect to `/dashboard` |
 
@@ -77,13 +85,15 @@ ViePOS/
 
 - Production auth now uses email/password plus RBAC; the old browser demo auth helpers remain in the tree only as legacy scaffold code.
 - DB migrate/seed smoke is blocked locally because the example `viepos` Postgres role/database is not present.
-- POS, payments, and table workflows are not part of the live auth/RBAC slice yet.
+- POS, payments, and table workflows are not part of the live auth/RBAC slice yet; the current dashboard pages are shell placeholders except for the existing staff admin forms.
+- Playwright shell coverage now exercises authenticated dashboard rendering across desktop, tablet, and mobile viewport sizes.
 
 ## Notes
 
 - Staff login is blocked while status is PENDING or DISABLED.
 - ROOT_ADMIN is the immutable target in transition policy.
 - Dashboard module access is server-enforced, not client-only.
+- The dashboard shell uses a 225px sidebar, a 60px topbar, and a mobile drawer below 1024px.
 
 ## Unresolved Questions
 

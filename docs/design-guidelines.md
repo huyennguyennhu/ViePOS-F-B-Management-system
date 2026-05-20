@@ -567,11 +567,11 @@ export function CartIcon() {
 - **md:** 1024px (desktop assumed for ViePOS — cashier counter)
 - **lg:** 1280px (large monitors)
 
-**Note:** ViePOS is desktop-first (1440×1024 POS screens). Mobile responsiveness deferred to future phase.
+**Note:** ViePOS remains desktop-first for POS workflows (1440×1024 cashier screens), but the internal dashboard shell now supports a responsive drawer below 1024px.
 
 ### Layout Grid
 - **Main container:** Max-width 1440px
-- **Sidebar:** Fixed 280px width (on desktop)
+- **Dashboard shell sidebar:** Fixed 225px width on desktop; collapses into a drawer below 1024px
 - **Menu grid:** 4 columns (items 75×75)
 - **Cart panel:** Fixed 320px width
 

@@ -2,6 +2,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/server/db/client';
 import { disableUserAccount, updateUserRole } from '@/server/auth/user-admin-service';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
+import { DashboardModulePlaceholder } from '@/components/layout/dashboard-module-placeholder';
 import { requireActiveUser, requireModuleAccess } from '@/lib/auth/require-session';
 import type { AppRole } from '@/lib/auth/auth-roles';
 
@@ -36,8 +37,19 @@ export default async function StaffRolesPage() {
 
   return (
     <DashboardShell user={user}>
-      <p>Root admin có thể nâng hoặc hạ quyền giữa admin và staff.</p>
+      <DashboardModulePlaceholder
+        description="Root admin có thể nâng/hạ quyền giữa admin và staff hoặc khóa tài khoản đang hoạt động."
+        eyebrow="Phân quyền"
+        metrics={[{ label: 'Tài khoản có thể quản trị', value: String(users.length) }]}
+        title="Vai trò nhân viên"
+      />
       <div className="dashboard-grid">
+        {users.length === 0 ? (
+          <article>
+            <strong>Không có tài khoản phù hợp</strong>
+            <span>Danh sách chỉ hiển thị admin và staff đang hoạt động.</span>
+          </article>
+        ) : null}
         {users.map((profile) => (
           <article key={profile.id}>
             <strong>{profile.user.name}</strong>

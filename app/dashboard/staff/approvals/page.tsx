@@ -2,6 +2,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/server/db/client';
 import { approveStaffAccount } from '@/server/auth/user-admin-service';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
+import { DashboardModulePlaceholder } from '@/components/layout/dashboard-module-placeholder';
 import { requireActiveUser, requireModuleAccess } from '@/lib/auth/require-session';
 
 async function approveAction(formData: FormData) {
@@ -24,8 +25,19 @@ export default async function StaffApprovalsPage() {
 
   return (
     <DashboardShell user={user}>
-      <p>Tài khoản nhân viên đang chờ duyệt.</p>
+      <DashboardModulePlaceholder
+        description="Duyệt tài khoản nhân viên đang chờ kích hoạt. Tác vụ duyệt vẫn chạy bằng server action hiện có."
+        eyebrow="Nhân sự"
+        metrics={[{ label: 'Tài khoản đang chờ duyệt', value: String(pendingStaff.length) }]}
+        title="Duyệt tài khoản"
+      />
       <div className="dashboard-grid">
+        {pendingStaff.length === 0 ? (
+          <article>
+            <strong>Không có tài khoản chờ duyệt</strong>
+            <span>Danh sách sẽ hiển thị khi nhân viên mới đăng ký.</span>
+          </article>
+        ) : null}
         {pendingStaff.map((profile) => (
           <article key={profile.id}>
             <strong>{profile.user.name}</strong>

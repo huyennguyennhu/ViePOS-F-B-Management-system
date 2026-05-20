@@ -1,4 +1,5 @@
 import { DashboardShell } from '@/components/layout/dashboard-shell';
+import { DashboardModulePlaceholder } from '@/components/layout/dashboard-module-placeholder';
 import { requireActiveUser } from '@/lib/auth/require-session';
 import { getVisibleDashboardModules } from '@/lib/auth/permissions';
 
@@ -8,18 +9,16 @@ export default async function DashboardPage() {
 
   return (
     <DashboardShell user={user}>
-      <p>
-        Tài khoản đang hoạt động với vai trò {user.role}. Các module bên dưới được lọc theo quyền
-        truy cập máy chủ.
-      </p>
-      <div className="dashboard-grid">
-        {modules.map((module) => (
-          <article key={module}>
-            <strong>{module}</strong>
-            <span>Sẵn sàng cho thao tác trong phạm vi quyền hiện tại.</span>
-          </article>
-        ))}
-      </div>
+      <DashboardModulePlaceholder
+        description="Tổng quan nội bộ cho ca bán hàng. Các module hiển thị bên dưới được lọc theo quyền truy cập máy chủ."
+        eyebrow="ViePOS Dashboard"
+        metrics={[
+          { label: 'Module khả dụng theo vai trò hiện tại', value: String(modules.length) },
+          { label: 'Trạng thái tài khoản', value: user.status },
+          { label: 'Vai trò đăng nhập', value: user.role },
+        ]}
+        title={`Xin chào, ${user.name}`}
+      />
     </DashboardShell>
   );
 }

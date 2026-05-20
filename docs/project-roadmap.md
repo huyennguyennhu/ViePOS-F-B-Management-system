@@ -1,7 +1,7 @@
 # ViePOS - Project Roadmap
 
 **Last Updated:** 2026-05-20  
-**Status:** Phase 1 complete. Phase 2 is next.
+**Status:** Phase 1 complete. Phase 2 is next, and the responsive internal dashboard shell foundation is in place.
 
 ## Phase Overview
 
@@ -55,6 +55,11 @@
 - [ ] Bank transfer / QR payment handling.
 - [ ] Receipt rendering and printing.
 
+### Current Foundation
+
+- [x] Responsive internal dashboard shell, mobile drawer, and shared placeholder screens are implemented.
+- [x] Playwright dashboard-shell coverage exists for authenticated desktop, tablet, and mobile viewport checks.
+
 ### Dependencies
 
 - Phase 1 complete.
@@ -96,7 +101,7 @@
 ## Current Risks
 
 - DB migrate/seed smoke still needs a local Postgres pass.
-- Future POS and table modules should reuse the server-side RBAC pattern already in place.
+- Future POS and table modules should reuse the server-side RBAC pattern and the internal shell foundation already in place.
 
 ## Unresolved Questions
 

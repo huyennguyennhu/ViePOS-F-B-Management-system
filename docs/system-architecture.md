@@ -2,14 +2,14 @@
 
 ## Current Architecture
 
-Only the auth, registration, RBAC, and dashboard shell slice is live now. POS, payments, and table workflows are planned, but the active runtime path is:
+Only the auth, registration, RBAC, and responsive dashboard shell slice is live now. POS, payments, and table workflows are planned, but the active runtime path is:
 
 ```
 Browser
   -> Next.js App Router
   -> Better Auth routes + app auth routes
   -> Prisma/PostgreSQL
-  -> Dashboard shell with server-side module filtering
+  -> Responsive dashboard shell with server-side module filtering
 ```
 
 ## Request Routing
@@ -22,8 +22,8 @@ Browser
 | `/api/app-auth/register` | Public registration API with app role/status policy |
 | `/api/app-auth/login` | Login API with credential-first status gating |
 | `/api/app-auth/logout` | Logout API that clears Better Auth cookies |
-| `/dashboard` | Authenticated shell |
-| `/dashboard/*` | Module pages behind server access checks |
+| `/dashboard` | Authenticated internal shell |
+| `/dashboard/*` | Module pages behind server access checks; shell-only routes render placeholder screens until POS workflows land |
 | `/admin` | Redirects to `/dashboard` |
 | `/pos` | Redirects to `/dashboard` |
 
@@ -58,7 +58,7 @@ The authenticated dashboard is server enforced.
 2. `requireActiveUser()` redirects unauthenticated or inactive users back to `/login`.
 3. `requireModuleAccess(module)` redirects unauthorized users to `/dashboard`.
 4. `lib/auth/permissions.ts` maps roles to visible modules.
-5. `components/layout/dashboard-shell.tsx` renders the module nav from that server-side module list.
+5. `components/layout/dashboard-shell.tsx` composes the responsive shell wrapper, and `DashboardShellClient` renders the sidebar/topbar/module nav from that server-side module list.
 
 ### Role To Module Map
 
@@ -114,11 +114,22 @@ The root admin target is immutable. `lib/auth/auth-roles.ts` treats the reserved
 | Access guards | `lib/auth/require-session.ts` |
 | Permissions | `lib/auth/permissions.ts` |
 
+## Dashboard Shell Composition
+
+The authenticated dashboard is split into focused layout pieces so the shell can stay server-first while still handling responsive navigation.
+
+1. `components/layout/dashboard-shell.tsx` imports `app/dashboard.css` and passes the authenticated user into the shell client wrapper.
+2. `components/layout/dashboard-shell-client.tsx` uses `usePathname` for active route state and `useState` for the mobile drawer toggle.
+3. `components/layout/dashboard-sidebar.tsx` renders the brand, grouped navigation, and settings action.
+4. `components/layout/dashboard-topbar.tsx` renders search, utility buttons, user identity, and the mobile menu button.
+5. `components/layout/dashboard-module-placeholder.tsx` keeps shell-only module pages visually consistent without pretending POS workflows are live.
+6. `e2e/dashboard-shell.spec.ts` verifies the authenticated shell at desktop, tablet, and mobile viewport sizes.
+
 ## Legacy And Planned Surfaces
 
 - `app/admin/page.tsx` and `app/pos/page.tsx` are compatibility redirects only.
 - `lib/auth/demo-auth.ts`, `browser-accounts.ts`, and `browser-session.ts` are legacy scaffold helpers, not the production auth path.
-- POS, payment, and table architecture should be documented separately once those routes are implemented.
+- POS, payment, and table architecture should be documented separately once those routes are implemented; the current dashboard shell is only the foundation layer.
 
 ## Unresolved Questions
 
