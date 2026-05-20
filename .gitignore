@@ -1,0 +1,10 @@
+.next/
+node_modules/
+dist/
+coverage/
+tsconfig.tsbuildinfo
+.env
+.env.local
+.env.*.local
+*.log
+repomix-output.xml
