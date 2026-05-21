@@ -1,0 +1,75 @@
+.auth-layout-container {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  flex: 1;
+}
+
+.auth-left-panel {
+  flex: 1;
+  background: linear-gradient(135deg, #2E5F2B 0%, #1c3d1a 100%);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  padding: 4rem;
+  color: white;
+}
+
+/* Subtle curved decorative lines */
+.auth-left-panel::before {
+  content: "";
+  position: absolute;
+  top: -20%;
+  left: -20%;
+  width: 140%;
+  height: 140%;
+  background: radial-gradient(circle, rgba(255,255,255,0.03) 0%, transparent 60%);
+  border-radius: 50%;
+}
+
+.auth-left-panel::after {
+  content: "";
+  position: absolute;
+  bottom: -40%;
+  right: -20%;
+  width: 100%;
+  height: 100%;
+  border: 2px solid rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+}
+
+.auth-branding {
+  z-index: 1;
+  max-width: 450px;
+}
+
+.auth-branding p {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+  opacity: 0.9;
+}
+
+.auth-branding h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.auth-right-panel {
+  flex: 1;
+  background-color: #F2F3ED;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+  position: relative;
+}
+
+@media (max-width: 768px) {
+  .auth-left-panel {
+    display: none;
+  }
+}

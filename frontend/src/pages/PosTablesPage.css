@@ -1,0 +1,304 @@
+.pos-tables-page {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #F8F9F6;
+  overflow: hidden;
+}
+
+.tables-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.tables-header-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e3050;
+  margin: 0;
+}
+
+.btn-refresh {
+  background-color: white;
+  border: 1px solid #eaeaea;
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #666;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+  transition: all 0.2s;
+}
+
+.btn-refresh:active {
+  background-color: #f5f5f5;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+.tables-alert-warning {
+  background-color: #fff8e1;
+  border: 1px solid #ffe082;
+  color: #b78103;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+/* Tabs */
+.tables-tabs {
+  display: flex;
+  background-color: #eaeaea;
+  padding: 4px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.tables-tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  background: none;
+  padding: 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #666;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tables-tab-btn.active {
+  background-color: white;
+  color: #349409;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+/* Tab Content */
+.tables-tab-content {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 80px; /* space for bottom nav */
+}
+
+/* Cards Grid */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.card-item-box {
+  background-color: white;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1.5px solid #eaeaea;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+  transition: all 0.2s;
+}
+
+/* Colors for Card States */
+.card-item-box.free {
+  border-color: #c8e6c9;
+  background-color: #f1f9ec;
+}
+.card-item-box.in-use {
+  border-color: #bbdefb;
+  background-color: #e3f2fd;
+}
+.card-item-box.overdue {
+  border-color: #ffcdd2;
+  background-color: #ffebee;
+  animation: pulse-red 2s infinite;
+}
+.card-item-box.locked {
+  border-color: #e0e0e0;
+  background-color: #f5f5f5;
+  opacity: 0.8;
+}
+
+@keyframes pulse-red {
+  0% { box-shadow: 0 0 0 0 rgba(239, 83, 80, 0.4); }
+  70% { box-shadow: 0 0 0 8px rgba(239, 83, 80, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 83, 80, 0); }
+}
+
+.card-item-num {
+  font-size: 24px;
+  font-weight: 800;
+  color: #1e3050;
+}
+
+.card-item-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 12px;
+}
+
+.free .card-item-status-badge { color: #2e7d32; background-color: #e8f5e9; }
+.in-use .card-item-status-badge { color: #1565c0; background-color: #e3f2fd; }
+.overdue .card-item-status-badge { color: #c62828; background-color: #ffebee; }
+.locked .card-item-status-badge { color: #616161; background-color: #eeeeee; }
+
+.card-item-actions {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.btn-card-action {
+  width: 100%;
+  padding: 8px 0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: all 0.2s;
+}
+
+.btn-card-action.release {
+  background-color: #349409;
+  color: white;
+  border: none;
+}
+.btn-card-action.release:active {
+  background-color: #257005;
+}
+
+.btn-card-action.lock {
+  background-color: white;
+  color: #c62828;
+  border: 1px solid #ffcdd2;
+}
+.btn-card-action.lock:active {
+  background-color: #ffebee;
+}
+
+.btn-card-action.unlock-btn {
+  color: #2e7d32;
+  border-color: #c8e6c9;
+}
+.btn-card-action.unlock-btn:active {
+  background-color: #e8f5e9;
+}
+
+/* Sessions Table */
+.sessions-list-wrapper {
+  background-color: white;
+  border-radius: 12px;
+  border: 1px solid #eaeaea;
+  overflow: hidden;
+}
+
+.no-sessions {
+  padding: 40px;
+  text-align: center;
+  color: #888;
+  font-weight: 500;
+}
+
+.sessions-table-container {
+  overflow-x: auto;
+}
+
+.sessions-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.sessions-table th {
+  background-color: #f8f9fa;
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #666;
+  border-bottom: 1px solid #eaeaea;
+}
+
+.sessions-table td {
+  padding: 14px 16px;
+  font-size: 14px;
+  color: #333;
+  border-bottom: 1px solid #f2f2f2;
+  white-space: nowrap;
+}
+
+.row-overdue {
+  background-color: #fff9f9;
+}
+
+.session-card-badge {
+  background-color: #1e3050;
+  color: white;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.session-order-id {
+  font-family: monospace;
+  font-weight: 600;
+  color: #555;
+}
+
+.session-status-tag {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 12px;
+}
+
+.session-status-tag.đang-sử-dụng { color: #1565c0; background-color: #e3f2fd; }
+.session-status-tag.quá-giờ { color: #c62828; background-color: #ffebee; }
+.session-status-tag.hoàn-thành { color: #2e7d32; background-color: #e8f5e9; }
+
+.session-release-btn {
+  background-color: #349409;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.session-release-btn:hover {
+  background-color: #257005;
+}
