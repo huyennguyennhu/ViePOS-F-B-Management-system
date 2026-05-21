@@ -31,13 +31,13 @@ ViePOS-F-B-Management-system/
 
 ### Bước 1: Cấu hình Database (Supabase)
 
-1. Vào dự án Supabase của bạn → **Settings → Database → Connection string → JDBC**.
+1. Vào dự án Supabase của bạn → **Settings → Database → Connection string → JDBC** (Chọn chế độ **Pooler**, port `6543` để hỗ trợ mạng IPv4 như Render/Local).
 2. Tạo file `backend/src/main/resources/application-local.yml` (không commit file này):
    ```yaml
    spring:
      datasource:
-       url: jdbc:postgresql://db.XXXX.supabase.co:5432/postgres
-       username: postgres
+       url: jdbc:postgresql://aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?prepareThreshold=0&sslmode=require
+       username: postgres.YOUR_PROJECT_REF
        password: YOUR_SUPABASE_PASSWORD
    jwt:
      secret: YOUR_JWT_SECRET_MIN_32_CHARS
@@ -128,8 +128,8 @@ VITE_API_URL=http://localhost:8080
 ```yaml
 spring:
   datasource:
-    url: jdbc:postgresql://...supabase.co:5432/postgres
-    username: postgres
+    url: jdbc:postgresql://[region].pooler.supabase.com:6543/postgres?prepareThreshold=0&sslmode=require
+    username: postgres.your_project_ref
     password: your_password
 jwt:
   secret: your_secret_key_min_32_characters

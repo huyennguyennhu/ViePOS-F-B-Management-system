@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { cardAPI } from '../services/api';
-import { CreditCard, Clock, Lock, Unlock, CheckCircle, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Plus, AlertTriangle, RefreshCw, Search } from 'lucide-react';
 import './PosTablesPage.css';
 
 interface Card {
@@ -19,12 +20,53 @@ interface CardSession {
   status: string; // "Đang sử dụng", "Hoàn thành", "Quá giờ"
 }
 
+// Custom SVG Icon for Settings Filter
+/* const FilterSettingsIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="4" y1="21" x2="4" y2="14" />
+    <line x1="4" y1="10" x2="4" y2="3" />
+    <line x1="12" y1="21" x2="12" y2="12" />
+    <line x1="12" y1="8" x2="12" y2="3" />
+    <line x1="20" y1="21" x2="20" y2="16" />
+    <line x1="20" y1="12" x2="20" y2="3" />
+    <line x1="2" y1="14" x2="6" y2="14" />
+    <line x1="10" y1="8" x2="14" y2="8" />
+    <line x1="18" y1="12" x2="22" y2="12" />
+  </svg>
+); */
+
 export default function PosTablesPage() {
-  const [activeTab, setActiveTab] = useState<'cards' | 'sessions'>('cards');
+  const navigate = useNavigate();
   const [cards, setCards] = useState<Card[]>([]);
   const [sessions, setSessions] = useState<CardSession[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Filter and search states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFilter, setSelectedFilter] = useState<'all' | '4h' | 'all_day' | 'near_overdue'>('all');
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const [ordersMetadata, setOrdersMetadata] = useState<Record<string, { itemCount: number }>>({});
+
+  // Real-time ticking timer
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Fetch orders metadata from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('pos_orders_metadata');
+      if (saved) {
+        setOrdersMetadata(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [cards, sessions]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -50,44 +92,82 @@ export default function PosTablesPage() {
       
       // Seed fallback data for testing
       setCards([
-        { id: 1, cardNumber: '06', status: 'trống' },
-        { id: 2, cardNumber: '09', status: 'Đang sử dụng' },
-        { id: 3, cardNumber: '10', status: 'trống' },
-        { id: 4, cardNumber: '11', status: 'khóa' },
-        { id: 5, cardNumber: '12', status: 'trống' },
-        { id: 6, cardNumber: '14', status: 'trống' },
-        { id: 7, cardNumber: '15', status: 'trống' },
-        { id: 8, cardNumber: '17', status: 'quá giờ' },
-        { id: 9, cardNumber: '20', status: 'trống' },
-        { id: 10, cardNumber: '21', status: 'trống' },
-        { id: 11, cardNumber: '23', status: 'trống' },
-        { id: 12, cardNumber: '25', status: 'trống' },
+        { id: 1, cardNumber: '04', status: 'quá giờ' },
+        { id: 2, cardNumber: '08', status: 'Đang sử dụng' },
+        { id: 3, cardNumber: '08', status: 'Đang sử dụng' }, // Let's have another card 08 for demo
+        { id: 4, cardNumber: '03', status: 'Đang sử dụng' },
+        { id: 5, cardNumber: '03', status: 'Đang sử dụng' }, // Second card 03 for Cả ngày
+        { id: 6, cardNumber: '07', status: 'trống' },
+        { id: 7, cardNumber: '11', status: 'khóa' },
       ]);
 
       const now = new Date();
-      const back4h = new Date(now.getTime() - 4.5 * 60 * 60 * 1000);
-      const end4h = new Date(back4h.getTime() + 4 * 60 * 60 * 1000);
+      // Card 04: Overdue by 2m 43s (started 4h ago, end 4h after start, but let's mock endTime to be exactly now - 2m 43s)
+      const start4 = new Date(now.getTime() - (4 * 60 * 60 + 2 * 60 + 43) * 1000);
+      const end4 = new Date(start4.getTime() + 4 * 60 * 60 * 1000); // overdue now
       
-      const back2h = new Date(now.getTime() - 2 * 60 * 60 * 1000);
-      const end2h = new Date(back2h.getTime() + 4 * 60 * 60 * 1000);
+      // Card 08: Near overdue (remaining 14m 2s)
+      const start8 = new Date(now.getTime() - (3 * 60 * 60 + 45 * 60 + 58) * 1000);
+      const end8 = new Date(start8.getTime() + 4 * 60 * 60 * 1000); // 14m 2s left
+
+      // Card 08 duplicate: Near overdue (remaining 14m 2s)
+      const start8_2 = new Date(now.getTime() - (3 * 60 * 60 + 45 * 60 + 58) * 1000);
+      const end8_2 = new Date(start8_2.getTime() + 4 * 60 * 60 * 1000);
+
+      // Card 03: Green active 4H (started 5m 17s ago, 4h duration)
+      const start3 = new Date(now.getTime() - (5 * 60 + 17) * 1000);
+      const end3 = new Date(start3.getTime() + 4 * 60 * 60 * 1000); // 3h 54m 43s left
+
+      // Card 03 duplicate: Green active Cả ngày (started 1h ago, all_day)
+      const start3_2 = new Date(now.getTime() - 1 * 60 * 60 * 1000);
+      // All day end time is 22:00 today
+      const end3_2 = new Date(now);
+      end3_2.setHours(22, 0, 0, 0);
 
       setSessions([
         {
           id: 1,
-          card: { id: 8, cardNumber: '17', status: 'quá giờ' },
-          startTime: back4h.toISOString(),
-          endTime: end4h.toISOString(),
+          card: { id: 1, cardNumber: '04', status: 'quá giờ' },
+          startTime: start4.toISOString(),
+          endTime: end4.toISOString(),
           actualEndTime: null,
-          orderId: 'ORD-987654321',
+          orderId: 'ORD-MOCK-04',
           status: 'Quá giờ'
         },
         {
           id: 2,
-          card: { id: 2, cardNumber: '09', status: 'Đang sử dụng' },
-          startTime: back2h.toISOString(),
-          endTime: end2h.toISOString(),
+          card: { id: 2, cardNumber: '08', status: 'Đang sử dụng' },
+          startTime: start8.toISOString(),
+          endTime: end8.toISOString(),
           actualEndTime: null,
-          orderId: 'ORD-123456789',
+          orderId: 'ORD-MOCK-08-1',
+          status: 'Đang sử dụng'
+        },
+        {
+          id: 3,
+          card: { id: 3, cardNumber: '08', status: 'Đang sử dụng' },
+          startTime: start8_2.toISOString(),
+          endTime: end8_2.toISOString(),
+          actualEndTime: null,
+          orderId: 'ORD-MOCK-08-2',
+          status: 'Đang sử dụng'
+        },
+        {
+          id: 4,
+          card: { id: 4, cardNumber: '03', status: 'Đang sử dụng' },
+          startTime: start3.toISOString(),
+          endTime: end3.toISOString(),
+          actualEndTime: null,
+          orderId: 'ORD-MOCK-03-1',
+          status: 'Đang sử dụng'
+        },
+        {
+          id: 5,
+          card: { id: 5, cardNumber: '03', status: 'Đang sử dụng' },
+          startTime: start3_2.toISOString(),
+          endTime: end3_2.toISOString(),
+          actualEndTime: null,
+          orderId: 'ORD-MOCK-03-2',
           status: 'Đang sử dụng'
         }
       ]);
@@ -101,6 +181,8 @@ export default function PosTablesPage() {
   }, []);
 
   const handleRelease = async (cardNumber: string) => {
+    const confirmRelease = window.confirm(`Bạn có chắc chắn muốn CHECK OUT (trả thẻ) số ${cardNumber}?`);
+    if (!confirmRelease) return;
     try {
       await cardAPI.releaseCard(cardNumber);
       alert(`Đã trả thẻ số ${cardNumber} thành công!`);
@@ -123,29 +205,89 @@ export default function PosTablesPage() {
     }
   };
 
-  const formatDateTime = (isoString: string) => {
-    const date = new Date(isoString);
-    return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + 
-           date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+  // Filter logic
+  const filteredCards = cards.filter(card => {
+    // 1. Search Query filter (by card number)
+    if (searchQuery && !card.cardNumber.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
+    }
+
+    // Find active session
+    const activeSession = sessions.find(
+      s => s.card.cardNumber === card.cardNumber &&
+           s.status !== 'Hoàn thành' &&
+           !s.actualEndTime
+    );
+
+    // 2. Tab Filter
+    if (selectedFilter === 'all') return true;
+
+    if (!activeSession) {
+      // If filtering for active sessions or specific times, free/locked cards should be hidden
+      return false;
+    }
+
+    const diffMs = new Date(activeSession.endTime).getTime() - new Date(activeSession.startTime).getTime();
+    const is4h = Math.abs(diffMs - 4 * 60 * 60 * 1000) < 60000;
+    const durationType = is4h ? '4h' : 'all_day';
+
+    const remainingTimeMs = new Date(activeSession.endTime).getTime() - currentTime.getTime();
+    const isOverdue = remainingTimeMs < 0;
+    const isNearOverdue = !isOverdue && remainingTimeMs <= 15 * 60 * 1000;
+
+    if (selectedFilter === '4h') {
+      return durationType === '4h';
+    }
+    if (selectedFilter === 'all_day') {
+      return durationType === 'all_day';
+    }
+    if (selectedFilter === 'near_overdue') {
+      return isOverdue || isNearOverdue;
+    }
+
+    return true;
+  });
+
+  // Sort logic based on status priority: Overdue (Red) > Near Overdue (Yellow) > In Use (Green) > Free (Grey) > Locked (Grey)
+  const getCardStatusWeight = (card: Card) => {
+    const activeSession = sessions.find(
+      s => s.card.cardNumber === card.cardNumber &&
+           s.status !== 'Hoàn thành' &&
+           !s.actualEndTime
+    );
+
+    if (activeSession) {
+      const remainingTimeMs = new Date(activeSession.endTime).getTime() - currentTime.getTime();
+      const isOverdue = remainingTimeMs < 0;
+      const isNearOverdue = !isOverdue && remainingTimeMs <= 15 * 60 * 1000;
+
+      if (isOverdue) return 1; // Quá giờ (Red)
+      if (isNearOverdue) return 2; // Sắp hết giờ (Yellow)
+      return 3; // Đang sử dụng (Green)
+    }
+
+    if (card.status === 'khóa') return 5; // Khóa (Grey)
+    return 4; // Trống (Grey)
   };
 
-  const getStatusText = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'trống': return 'Trống';
-      case 'đang sử dụng': return 'Đang sử dụng';
-      case 'quá giờ': return 'Quá giờ';
-      case 'khóa': return 'Đã khóa';
-      default: return status;
+  const sortedCards = [...filteredCards].sort((a, b) => {
+    const weightA = getCardStatusWeight(a);
+    const weightB = getCardStatusWeight(b);
+    if (weightA !== weightB) {
+      return weightA - weightB;
     }
-  };
+    // Secondary sort by card number ascending
+    return parseInt(a.cardNumber) - parseInt(b.cardNumber);
+  });
 
   return (
     <div className="pos-tables-page">
-      {/* Header */}
-      <div className="tables-header">
-        <h1 className="tables-header-title">Quản Lý Thẻ & Session</h1>
-        <button className="btn-refresh" onClick={fetchData} disabled={loading}>
-          <RefreshCw size={18} className={loading ? 'spinning' : ''} />
+      {/* Centered Header with subtitle/action */}
+      <div className="tables-header-centered">
+        <div style={{ width: '36px' }}></div> {/* Spacer to align title center */}
+        <h1 className="tables-title-text">Bàn</h1>
+        <button className="btn-refresh-subtle" onClick={fetchData} disabled={loading}>
+          <RefreshCw size={16} className={loading ? 'spinning' : ''} />
         </button>
       </div>
 
@@ -155,114 +297,196 @@ export default function PosTablesPage() {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="tables-tabs">
-        <button 
-          className={`tables-tab-btn ${activeTab === 'cards' ? 'active' : ''}`}
-          onClick={() => setActiveTab('cards')}
-        >
-          <CreditCard size={18} />
-          Danh sách thẻ ({cards.length})
-        </button>
-        <button 
-          className={`tables-tab-btn ${activeTab === 'sessions' ? 'active' : ''}`}
-          onClick={() => setActiveTab('sessions')}
-        >
-          <Clock size={18} />
-          Phiên sử dụng ({sessions.filter(s => s.status !== 'Hoàn thành').length} hoạt động)
+      {/* Search Box */}
+      <div className="tables-search-row">
+        <div className="tables-search-container">
+          <Search size={18} color="#a0a0a0" />
+          <input 
+            type="text" 
+            placeholder="Tìm kiếm..." 
+            className="tables-search-input" 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        {/* <button className="tables-filter-btn" title="Bộ lọc">
+          <FilterSettingsIcon />
+        </button> */}
+      </div>
+
+      {/* Pill Filter Container */}
+      <div className="filter-pills-container">
+        <div className="filter-pills-scroll">
+          <button 
+            className={`pill-btn ${selectedFilter === 'all' ? 'active' : ''}`}
+            onClick={() => setSelectedFilter('all')}
+          >
+            Tất cả
+          </button>
+          <button 
+            className={`pill-btn ${selectedFilter === '4h' ? 'active' : ''}`}
+            onClick={() => setSelectedFilter('4h')}
+          >
+            4H
+          </button>
+          <button 
+            className={`pill-btn ${selectedFilter === 'all_day' ? 'active' : ''}`}
+            onClick={() => setSelectedFilter('all_day')}
+          >
+            Cả ngày
+          </button>
+          <button 
+            className={`pill-btn ${selectedFilter === 'near_overdue' ? 'active' : ''}`}
+            onClick={() => setSelectedFilter('near_overdue')}
+          >
+            Sắp hết giờ
+          </button>
+        </div>
+        <button className="pill-arrow-btn">
+          <span>&rsaquo;</span>
         </button>
       </div>
 
-      {/* Content */}
+      {/* Cards Grid */}
       <div className="tables-tab-content">
-        {activeTab === 'cards' ? (
-          <div className="cards-grid">
-            {cards.map(card => {
-              const statusClass = card.status === 'Đang sử dụng' ? 'in-use' : 
-                                  card.status === 'quá giờ' ? 'overdue' : 
-                                  card.status === 'khóa' ? 'locked' : 'free';
-              return (
-                <div key={card.id} className={`card-item-box ${statusClass}`}>
-                  <div className="card-item-num">{card.cardNumber}</div>
-                  <div className="card-item-status-badge">
-                    {card.status === 'trống' && <CheckCircle size={12} />}
-                    {card.status === 'quá giờ' && <AlertTriangle size={12} />}
-                    {card.status === 'khóa' && <Lock size={12} />}
-                    <span>{getStatusText(card.status)}</span>
-                  </div>
+        {loading ? (
+          <div className="no-cards-found">Đang tải dữ liệu...</div>
+        ) : sortedCards.length === 0 ? (
+          <div className="no-cards-found">Không tìm thấy thẻ bàn nào phù hợp.</div>
+        ) : (
+          <div className="cards-grid-mockup">
+            {sortedCards.map((card, idx) => {
+              const activeSession = sessions.find(
+                s => s.card.cardNumber === card.cardNumber &&
+                     s.status !== 'Hoàn thành' &&
+                     !s.actualEndTime
+              );
+
+              let statusColor: 'overdue' | 'near-overdue' | 'in-use' | 'free' | 'locked' = 'free';
+              let badgeText = 'Trống';
+              let timerStr = 'TRỐNG';
+              let subText = '';
+              let durationType: '4h' | 'all_day' | null = null;
+
+              if (activeSession) {
+                const diffMs = new Date(activeSession.endTime).getTime() - new Date(activeSession.startTime).getTime();
+                const is4h = Math.abs(diffMs - 4 * 60 * 60 * 1000) < 60000;
+                durationType = is4h ? '4h' : 'all_day';
+
+                const remainingTimeMs = new Date(activeSession.endTime).getTime() - currentTime.getTime();
+                const isOverdue = remainingTimeMs < 0;
+                const isNearOverdue = !isOverdue && remainingTimeMs <= 15 * 60 * 1000;
+
+                if (isOverdue) {
+                  statusColor = 'overdue';
+                  badgeText = 'Quá giờ';
                   
-                  <div className="card-item-actions">
-                    {(card.status === 'Đang sử dụng' || card.status === 'quá giờ') ? (
-                      <button 
-                        className="btn-card-action release"
-                        onClick={() => handleRelease(card.cardNumber)}
-                      >
-                        Trả thẻ
-                      </button>
-                    ) : (
-                      <button 
-                        className={`btn-card-action lock ${card.status === 'khóa' ? 'unlock-btn' : ''}`}
-                        onClick={() => handleToggleLock(card)}
-                      >
-                        {card.status === 'khóa' ? <Unlock size={14} /> : <Lock size={14} />}
-                        {card.status === 'khóa' ? 'Mở khóa' : 'Khóa'}
-                      </button>
-                    )}
+                  const elapsedMs = Math.abs(remainingTimeMs);
+                  const hours = Math.floor(elapsedMs / (3600 * 1000));
+                  const mins = Math.floor((elapsedMs % (3600 * 1000)) / (60 * 1000));
+                  const secs = Math.floor((elapsedMs % (60 * 1000)) / 1000);
+                  const pad = (n: number) => n.toString().padStart(2, '0');
+                  timerStr = `-${pad(hours)} : ${pad(mins)} : ${pad(secs)}`;
+                } else if (isNearOverdue) {
+                  statusColor = 'near-overdue';
+                  badgeText = 'Sắp hết giờ';
+
+                  const hours = Math.floor(remainingTimeMs / (3600 * 1000));
+                  const mins = Math.floor((remainingTimeMs % (3600 * 1000)) / (60 * 1000));
+                  const secs = Math.floor((remainingTimeMs % (60 * 1000)) / 1000);
+                  const pad = (n: number) => n.toString().padStart(2, '0');
+                  timerStr = `${pad(hours)} : ${pad(mins)} : ${pad(secs)}`;
+                } else {
+                  statusColor = 'in-use';
+                  badgeText = durationType === '4h' ? '4H' : 'Cả ngày';
+
+                  if (durationType === '4h') {
+                    const hours = Math.floor(remainingTimeMs / (3600 * 1000));
+                    const mins = Math.floor((remainingTimeMs % (3600 * 1000)) / (60 * 1000));
+                    const secs = Math.floor((remainingTimeMs % (60 * 1000)) / 1000);
+                    const pad = (n: number) => n.toString().padStart(2, '0');
+                    timerStr = `${pad(hours)} : ${pad(mins)} : ${pad(secs)}`;
+                  } else {
+                    timerStr = 'CẢ NGÀY';
+                  }
+                }
+
+                const startTimeStr = new Date(activeSession.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                
+                // Get item count from metadata or fallback
+                let itemCount = ordersMetadata[activeSession.orderId]?.itemCount;
+                if (itemCount === undefined) {
+                  // Fallbacks for mock/seeded sessions based on index / card number
+                  if (card.cardNumber === '04') itemCount = 1;
+                  else if (card.cardNumber === '08') itemCount = 2;
+                  else if (card.cardNumber === '03') itemCount = 1;
+                  else itemCount = 1; // general fallback
+                }
+                subText = `Vào lúc ${startTimeStr} | ${itemCount} món`;
+              } else if (card.status === 'khóa') {
+                statusColor = 'locked';
+                badgeText = 'Đã khóa';
+                timerStr = 'ĐÃ KHÓA';
+              }
+
+              // Use unique key considering duplicate cardNumbers in mock data
+              const uniqueKey = `${card.id}-${card.cardNumber}-${idx}`;
+
+              return (
+                <div key={uniqueKey} className={`table-card-box ${statusColor}`}>
+                  {/* Card Header Section */}
+                  <div className="table-card-header">
+                    <span className="table-card-number">#{card.cardNumber}</span>
+                    <span className="table-card-badge-tag">
+                      {statusColor === 'overdue' && <AlertTriangle size={10} style={{ marginRight: '2px', display: 'inline', verticalAlign: 'middle' }} />}
+                      {badgeText}
+                    </span>
+                  </div>
+
+                  {/* Card Body Section */}
+                  <div className="table-card-body">
+                    <div className="table-card-timer">{timerStr}</div>
+                    {subText && <div className="table-card-subtext">{subText}</div>}
+                    
+                    {/* Action Buttons Row */}
+                    <div className="table-card-actions">
+                      {activeSession ? (
+                        <>
+                          <button 
+                            className="card-plus-btn"
+                            onClick={() => navigate('/pos/sales')}
+                            title="Thêm món"
+                          >
+                            <Plus size={16} />
+                          </button>
+                          <button 
+                            className="card-checkout-btn"
+                            onClick={() => handleRelease(card.cardNumber)}
+                          >
+                            CHECK OUT
+                          </button>
+                        </>
+                      ) : statusColor === 'locked' ? (
+                        <button 
+                          className="card-wide-unlock-btn"
+                          onClick={() => handleToggleLock(card)}
+                        >
+                          MỞ KHÓA
+                        </button>
+                      ) : (
+                        <button 
+                          className="card-wide-plus-btn"
+                          onClick={() => navigate('/pos/sales')}
+                          title="Tạo phiên thẻ mới"
+                        >
+                          <Plus size={20} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
             })}
-          </div>
-        ) : (
-          <div className="sessions-list-wrapper">
-            {sessions.length === 0 ? (
-              <div className="no-sessions">Không có phiên sử dụng nào.</div>
-            ) : (
-              <div className="sessions-table-container">
-                <table className="sessions-table">
-                  <thead>
-                    <tr>
-                      <th>Thẻ</th>
-                      <th>Đơn hàng</th>
-                      <th>Bắt đầu</th>
-                      <th>Kết thúc dự kiến</th>
-                      <th>Trạng thái</th>
-                      <th>Hành động</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sessions.map(session => {
-                      const isSessionActive = session.status === 'Đang sử dụng' || session.status === 'Quá giờ';
-                      return (
-                        <tr key={session.id} className={session.status === 'Quá giờ' ? 'row-overdue' : ''}>
-                          <td>
-                            <span className="session-card-badge">{session.card.cardNumber}</span>
-                          </td>
-                          <td><span className="session-order-id">{session.orderId}</span></td>
-                          <td>{formatDateTime(session.startTime)}</td>
-                          <td>{formatDateTime(session.endTime)}</td>
-                          <td>
-                            <span className={`session-status-tag ${session.status.toLowerCase().replace(' ', '-')}`}>
-                              {session.status}
-                            </span>
-                          </td>
-                          <td>
-                            {isSessionActive && (
-                              <button 
-                                className="session-release-btn"
-                                onClick={() => handleRelease(session.card.cardNumber)}
-                              >
-                                Trả thẻ
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
         )}
       </div>

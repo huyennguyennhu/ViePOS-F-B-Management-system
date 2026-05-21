@@ -350,13 +350,22 @@ export default function PosSalesPage() {
     // Check if there is any 4h duration in cart items
     const has4h = cartItems.some(item => item.serveType === 'dine_in' && item.duration === '4h');
     const duration = has4h ? '4h' : 'all_day';
+    const orderId = 'ORD-' + Date.now().toString();
+    const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
     try {
       await cardAPI.startSession({
         cardNumber: selectedCardNumber,
-        orderId: 'ORD-' + Date.now().toString(),
+        orderId: orderId,
         duration: duration
       });
+      // Save metadata to LocalStorage for number of items
+      const savedMetadata = localStorage.getItem('pos_orders_metadata');
+      const metadata = savedMetadata ? JSON.parse(savedMetadata) : {};
+      metadata[orderId] = {
+        itemCount: totalItems
+      };
+      localStorage.setItem('pos_orders_metadata', JSON.stringify(metadata));
     } catch (err) {
       console.error("Lỗi khi tạo phiên thẻ:", err);
     }

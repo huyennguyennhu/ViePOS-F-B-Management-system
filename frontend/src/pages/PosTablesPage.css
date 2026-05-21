@@ -3,42 +3,45 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: #F8F9F6;
+  background-color: #F4F5F2; /* Light warm-grey background matching screenshot */
   overflow: hidden;
 }
 
-.tables-header {
+/* Centered Header */
+.tables-header-centered {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
   flex-shrink: 0;
+  position: relative;
 }
 
-.tables-header-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: #1e3050;
+.tables-title-text {
+  font-size: 22px;
+  font-weight: 800;
+  color: #111;
   margin: 0;
+  text-align: center;
+  flex: 1;
 }
 
-.btn-refresh {
-  background-color: white;
-  border: 1px solid #eaeaea;
-  border-radius: 8px;
-  width: 36px;
-  height: 36px;
+.btn-refresh-subtle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #666;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  color: #666;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-  transition: all 0.2s;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  transition: background-color 0.2s;
 }
 
-.btn-refresh:active {
-  background-color: #f5f5f5;
+.btn-refresh-subtle:active {
+  background-color: rgba(0, 0, 0, 0.05);
 }
 
 @keyframes spin {
@@ -62,243 +65,360 @@
   flex-shrink: 0;
 }
 
-/* Tabs */
-.tables-tabs {
+/* Search Row */
+.tables-search-row {
   display: flex;
-  background-color: #eaeaea;
-  padding: 4px;
-  border-radius: 8px;
+  align-items: center;
+  gap: 12px;
   margin-bottom: 16px;
-  gap: 4px;
   flex-shrink: 0;
 }
 
-.tables-tab-btn {
+.tables-search-container {
   flex: 1;
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
+  background-color: #fff;
+  border: 1.5px solid #eaeaea;
+  border-radius: 20px;
+  padding: 6px 16px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.01);
+}
+
+.tables-search-input {
+  flex: 1;
   border: none;
-  background: none;
-  padding: 10px 0;
+  outline: none;
   font-size: 14px;
-  font-weight: 600;
-  color: #666;
-  border-radius: 6px;
+  color: #333;
+  background: transparent;
+}
+
+.tables-filter-btn {
+  background-color: #349409;
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  box-shadow: 0 3px 8px rgba(52, 148, 9, 0.25);
   transition: all 0.2s;
+  flex-shrink: 0;
 }
 
-.tables-tab-btn.active {
-  background-color: white;
-  color: #349409;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+.tables-filter-btn:active {
+  transform: scale(0.95);
+  background-color: #257005;
 }
 
-/* Tab Content */
+/* Tab Content Scroll */
 .tables-tab-content {
   flex: 1;
   overflow-y: auto;
   padding-bottom: 80px; /* space for bottom nav */
 }
 
-/* Cards Grid */
-.cards-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 12px;
+/* Pill Filters Container */
+.filter-pills-container {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 8px;
+  flex-shrink: 0;
+  width: 100%;
 }
 
-.card-item-box {
-  background-color: white;
-  border-radius: 12px;
-  padding: 16px;
-  border: 1.5px solid #eaeaea;
+.filter-pills-scroll {
+  flex: 1;
   display: flex;
-  flex-direction: column;
-  align-items: center;
   gap: 8px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+  overflow-x: auto;
+  scrollbar-width: none; /* Hide scrollbar for Firefox */
+}
+
+.filter-pills-scroll::-webkit-scrollbar {
+  display: none; /* Hide scrollbar for Chrome/Safari */
+}
+
+.pill-btn {
+  white-space: nowrap;
+  background-color: #fff;
+  border: 1.5px solid #eaeaea;
+  color: #888;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
   transition: all 0.2s;
 }
 
-/* Colors for Card States */
-.card-item-box.free {
-  border-color: #c8e6c9;
-  background-color: #f1f9ec;
-}
-.card-item-box.in-use {
-  border-color: #bbdefb;
-  background-color: #e3f2fd;
-}
-.card-item-box.overdue {
-  border-color: #ffcdd2;
-  background-color: #ffebee;
-  animation: pulse-red 2s infinite;
-}
-.card-item-box.locked {
-  border-color: #e0e0e0;
-  background-color: #f5f5f5;
-  opacity: 0.8;
+.pill-btn.active {
+  background-color: #349409;
+  color: #fff;
+  border-color: #349409;
+  box-shadow: 0 2px 6px rgba(52, 148, 9, 0.15);
 }
 
-@keyframes pulse-red {
-  0% { box-shadow: 0 0 0 0 rgba(239, 83, 80, 0.4); }
-  70% { box-shadow: 0 0 0 8px rgba(239, 83, 80, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(239, 83, 80, 0); }
-}
-
-.card-item-num {
-  font-size: 24px;
-  font-weight: 800;
-  color: #1e3050;
-}
-
-.card-item-status-badge {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 8px;
-  border-radius: 12px;
-}
-
-.free .card-item-status-badge { color: #2e7d32; background-color: #e8f5e9; }
-.in-use .card-item-status-badge { color: #1565c0; background-color: #e3f2fd; }
-.overdue .card-item-status-badge { color: #c62828; background-color: #ffebee; }
-.locked .card-item-status-badge { color: #616161; background-color: #eeeeee; }
-
-.card-item-actions {
-  width: 100%;
-  margin-top: 8px;
-}
-
-.btn-card-action {
-  width: 100%;
-  padding: 8px 0;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
+.pill-arrow-btn {
+  background-color: #fff;
+  border: 1.5px solid #eaeaea;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  cursor: pointer;
+  color: #888;
+  font-size: 20px;
+  line-height: 1;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+/* Cards Grid */
+.cards-grid-mockup {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr); /* 2 columns exactly like mockup */
+  gap: 14px;
+}
+
+@media (min-width: 480px) {
+  .cards-grid-mockup {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+}
+
+/* Card Box */
+.table-card-box {
+  background-color: #fff;
+  border-radius: 16px;
+  border: 2px solid #B1B1B1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.02);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.table-card-box:active {
+  transform: scale(0.98);
+}
+
+/* Status Colors */
+.table-card-box.free {
+  border-color: #B1B1B1;
+}
+.table-card-box.in-use {
+  border-color: #349409;
+}
+.table-card-box.near-overdue {
+  border-color: #F2BF3D;
+}
+.table-card-box.overdue {
+  border-color: #C42326;
+}
+.table-card-box.locked {
+  border-color: #B1B1B1;
+  opacity: 0.85;
+}
+
+/* Card Header */
+.table-card-header {
+  padding: 8px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 16px;
+}
+
+/* Header backgrounds */
+.free .table-card-header {
+  background-color: #B1B1B1;
+}
+.in-use .table-card-header {
+  background-color: #349409;
+}
+.near-overdue .table-card-header {
+  background-color: #F2BF3D;
+}
+.overdue .table-card-header {
+  background-color: #C42326;
+}
+.locked .table-card-header {
+  background-color: #B1B1B1;
+}
+
+.table-card-number {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.table-card-badge-tag {
+  background-color: #fff;
+  color: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Badge text colors */
+.free .table-card-badge-tag { color: #B1B1B1; }
+.in-use .table-card-badge-tag { color: #349409; }
+.near-overdue .table-card-badge-tag { color: #F2BF3D; }
+.overdue .table-card-badge-tag { color: #C42326; }
+.locked .table-card-badge-tag { color: #B1B1B1; }
+
+/* Card Body */
+.table-card-body {
+  padding: 16px 12px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  text-align: center;
+}
+
+.table-card-timer {
+  font-size: 21px;
+  font-weight: 800;
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+}
+
+/* Timer colors */
+.free .table-card-timer { color: #B1B1B1; }
+.in-use .table-card-timer { color: #349409; }
+.near-overdue .table-card-timer { color: #F2BF3D; }
+.overdue .table-card-timer { color: #C42326; }
+.locked .table-card-timer { color: #B1B1B1; }
+
+.table-card-subtext {
+  font-size: 11px;
+  color: #a0a0a0;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+/* Card Buttons Actions Row */
+.table-card-actions {
+  width: 100%;
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+/* Plus square button for active card */
+.card-plus-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
   transition: all 0.2s;
 }
 
-.btn-card-action.release {
-  background-color: #349409;
-  color: white;
-  border: none;
-}
-.btn-card-action.release:active {
-  background-color: #257005;
+.in-use .card-plus-btn { border: 1.5px solid #349409; color: #349409; }
+.near-overdue .card-plus-btn { border: 1.5px solid #F2BF3D; color: #F2BF3D; }
+.overdue .card-plus-btn { border: 1.5px solid #C42326; color: #C42326; }
+
+.card-plus-btn:active {
+  background-color: rgba(0, 0, 0, 0.05);
 }
 
-.btn-card-action.lock {
-  background-color: white;
-  color: #c62828;
-  border: 1px solid #ffcdd2;
-}
-.btn-card-action.lock:active {
-  background-color: #ffebee;
-}
-
-.btn-card-action.unlock-btn {
-  color: #2e7d32;
-  border-color: #c8e6c9;
-}
-.btn-card-action.unlock-btn:active {
-  background-color: #e8f5e9;
+/* Check Out button */
+.card-checkout-btn {
+  flex: 1;
+  height: 36px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  background-color: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.5px;
 }
 
-/* Sessions Table */
-.sessions-list-wrapper {
-  background-color: white;
-  border-radius: 12px;
-  border: 1px solid #eaeaea;
-  overflow: hidden;
+.in-use .card-checkout-btn {
+  border: 1.5px solid #349409;
+  color: #349409;
+}
+.in-use .card-checkout-btn:active {
+  background-color: rgba(52, 148, 9, 0.06);
 }
 
-.no-sessions {
-  padding: 40px;
+.near-overdue .card-checkout-btn {
+  border: 1.5px solid #F2BF3D;
+  color: #F2BF3D;
+}
+.near-overdue .card-checkout-btn:active {
+  background-color: rgba(242, 191, 61, 0.06);
+}
+
+.overdue .card-checkout-btn {
+  border: 1.5px solid #C42326;
+  color: #C42326;
+}
+.overdue .card-checkout-btn:active {
+  background-color: rgba(196, 35, 38, 0.06);
+}
+
+/* Wide Plus for Empty card */
+.card-wide-plus-btn {
+  width: 100%;
+  height: 36px;
+  border-radius: 8px;
+  border: 1.5px solid #B1B1B1;
+  color: #B1B1B1;
+  background-color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.card-wide-plus-btn:active {
+  background-color: #eaeaea;
+}
+
+/* Wide Unlock for Locked card */
+.card-wide-unlock-btn {
+  width: 100%;
+  height: 36px;
+  border-radius: 8px;
+  border: 1.5px solid #B1B1B1;
+  color: #666;
+  font-weight: 800;
+  font-size: 12px;
+  background-color: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.card-wide-unlock-btn:active {
+  background-color: #eaeaea;
+}
+
+.no-cards-found {
   text-align: center;
+  padding: 40px 20px;
   color: #888;
   font-weight: 500;
-}
-
-.sessions-table-container {
-  overflow-x: auto;
-}
-
-.sessions-table {
-  width: 100%;
-  border-collapse: collapse;
-  text-align: left;
-}
-
-.sessions-table th {
-  background-color: #f8f9fa;
-  padding: 12px 16px;
-  font-size: 13px;
-  font-weight: 700;
-  color: #666;
-  border-bottom: 1px solid #eaeaea;
-}
-
-.sessions-table td {
-  padding: 14px 16px;
-  font-size: 14px;
-  color: #333;
-  border-bottom: 1px solid #f2f2f2;
-  white-space: nowrap;
-}
-
-.row-overdue {
-  background-color: #fff9f9;
-}
-
-.session-card-badge {
-  background-color: #1e3050;
-  color: white;
-  font-weight: 700;
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 13px;
-}
-
-.session-order-id {
-  font-family: monospace;
-  font-weight: 600;
-  color: #555;
-}
-
-.session-status-tag {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 8px;
-  border-radius: 12px;
-}
-
-.session-status-tag.đang-sử-dụng { color: #1565c0; background-color: #e3f2fd; }
-.session-status-tag.quá-giờ { color: #c62828; background-color: #ffebee; }
-.session-status-tag.hoàn-thành { color: #2e7d32; background-color: #e8f5e9; }
-
-.session-release-btn {
-  background-color: #349409;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.session-release-btn:hover {
-  background-color: #257005;
 }
