@@ -86,51 +86,54 @@ cd backend
 
 ---
 
-## Deploy lên Vercel (Frontend)
+## 🌐 Dự án chạy chính thức (Production)
 
-1. Push code lên GitHub.
-2. Vào [vercel.com](https://vercel.com) → Import project → chọn thư mục **`frontend`**.
-3. Thêm biến môi trường: `VITE_API_URL` = URL của Backend (sau khi deploy backend).
-4. Bấm **Deploy**. Xong!
+- **Frontend (Firebase Hosting)**: [https://molten-gasket-434712-c8.web.app](https://molten-gasket-434712-c8.web.app)
+- **Backend (Render Web Service)**: `https://viepos-f-b-management-system.onrender.com`
 
 ---
 
-## Deploy lên Firebase (Frontend)
+## 🚀 Quy trình cập nhật & Deploy khi thay đổi Code
 
-1. Cài đặt Firebase CLI (nếu chưa có):
+Khi bạn thực hiện thay đổi mã nguồn trong tương lai, hãy làm theo quy trình dưới đây để cập nhật ứng dụng:
+
+### 1. Đối với Backend (Spring Boot - Render)
+Render được cấu hình tự động Deploy từ GitHub. Khi sửa xong code Backend:
+1. Gõ lệnh git commit và push code lên GitHub:
    ```bash
-   npm install -g firebase-tools
+   git add .
+   git commit -m "mô tả thay đổi của bạn"
+   git push origin main
    ```
-2. Đăng nhập vào tài khoản Firebase:
-   ```bash
-   firebase login
-   ```
-3. Di chuyển vào thư mục `frontend` và tiến hành build mã nguồn:
+2. Render sẽ tự động phát hiện commit mới trên nhánh `main`, kéo code về build lại bằng Dockerfile và cập nhật phiên bản mới tự động (Auto-deploy).
+
+### 2. Đối với Frontend (React - Firebase Hosting)
+Firebase Hosting cần được Deploy thủ công từ máy tính của bạn:
+1. Mở terminal di chuyển vào thư mục `frontend`:
    ```bash
    cd frontend
+   ```
+2. Chạy lệnh build để tạo các file tối ưu cho môi trường sản xuất (đọc cấu hình từ `.env.production` để kết nối tới Render):
+   ```bash
    pnpm run build
    ```
-4. Deploy lên Firebase Hosting:
+3. Chạy lệnh deploy để tải bản build mới lên Firebase Hosting:
    ```bash
    firebase deploy --only hosting
    ```
 
 ---
 
-## Biến môi trường
+## 🔑 Biến môi trường trên Production
 
-### Frontend (`frontend/.env.local`)
+### 1. Frontend (`frontend/.env.production`)
 ```bash
-VITE_API_URL=http://localhost:8080
+VITE_API_URL=https://viepos-f-b-management-system.onrender.com
 ```
 
-### Backend (`backend/src/main/resources/application-local.yml`)
-```yaml
-spring:
-  datasource:
-    url: jdbc:postgresql://[region].pooler.supabase.com:6543/postgres?prepareThreshold=0&sslmode=require
-    username: postgres.your_project_ref
-    password: your_password
-jwt:
-  secret: your_secret_key_min_32_characters
-```
+### 2. Backend (Render Environment)
+Cần cấu hình 4 biến môi trường sau trong mục **Environment** trên Dashboard Render:
+- `SPRING_DATASOURCE_URL` = `jdbc:postgresql://aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?prepareThreshold=0&sslmode=require`
+- `SPRING_DATASOURCE_USERNAME` = `postgres.osnngwxnpfpbynbwfdnq`
+- `SPRING_DATASOURCE_PASSWORD` = `Hoilamcgi282111`
+- `JWT_SECRET` = `dcm0RjLIMaVBTQJprG7+qvIl5O6nIc/N2GH1nOLjPhAdkL/9rmmGOjjNl8/HcCV89+YO/WnUunpPV0G4Luke1g==`
