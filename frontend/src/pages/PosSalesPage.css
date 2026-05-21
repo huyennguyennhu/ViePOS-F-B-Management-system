@@ -438,6 +438,7 @@
   z-index: 10000; /* above everything */
   display: flex;
   justify-content: center;
+  overflow: hidden; /* Prevent content overflow when keyboard opens */
 }
 
 .pos-cart-container {
@@ -446,7 +447,7 @@
   background-color: transparent;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: 100%; /* Use 100% instead of 100vh so it respects the fixed overlay bounds */
 }
 
 .pos-cart-header {

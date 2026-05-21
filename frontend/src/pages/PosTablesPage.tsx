@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { cardAPI } from '../services/api';
-import { Plus, AlertTriangle, RefreshCw, Search } from 'lucide-react';
+import { Plus, AlertTriangle, RefreshCw, Search, X } from 'lucide-react';
 import './PosTablesPage.css';
 
 interface Card {
@@ -46,7 +46,22 @@ export default function PosTablesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | '4h' | 'all_day' | 'near_overdue'>('all');
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
-  const [ordersMetadata, setOrdersMetadata] = useState<Record<string, { itemCount: number }>>({});
+  
+  // Track detailed order metadata including items list
+  const [ordersMetadata, setOrdersMetadata] = useState<Record<string, { 
+    itemCount: number;
+    items?: Array<{
+      name: string;
+      sku: string;
+      serveType: 'takeaway' | 'dine_in';
+      duration: '4h' | 'all_day';
+      quantity: number;
+      price: number;
+      note?: string;
+    }>;
+  }>>({});
+
+  const [selectedSessionForDetail, setSelectedSessionForDetail] = useState<CardSession | null>(null);
 
   // Real-time ticking timer
   useEffect(() => {
@@ -60,9 +75,48 @@ export default function PosTablesPage() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem('pos_orders_metadata');
-      if (saved) {
-        setOrdersMetadata(JSON.parse(saved));
-      }
+      let metadata = saved ? JSON.parse(saved) : {};
+      
+      // Ensure mock data exists for live-demo cards
+      const mockMetadata = {
+        'ORD-MOCK-04': {
+          itemCount: 1,
+          items: [
+            { name: 'Cà phê đen', sku: 'CF-DEN-01', serveType: 'dine_in', duration: '4h', quantity: 1, price: 35000, note: 'Ít đường' }
+          ]
+        },
+        'ORD-MOCK-08-1': {
+          itemCount: 2,
+          items: [
+            { name: 'Trà sữa truyền thống', sku: 'TS-TRU-02', serveType: 'dine_in', duration: '4h', quantity: 1, price: 35000 },
+            { name: 'Bánh gấu', sku: 'AV-BGAU-02', serveType: 'takeaway', duration: 'all_day', quantity: 1, price: 25000 }
+          ]
+        },
+        'ORD-MOCK-08-2': {
+          itemCount: 2,
+          items: [
+            { name: 'Trà sữa đặc sản', sku: 'TS-DAC-01', serveType: 'dine_in', duration: '4h', quantity: 1, price: 35000 },
+            { name: 'Bánh que', sku: 'AV-BQUE-03', serveType: 'takeaway', duration: 'all_day', quantity: 1, price: 25000 }
+          ]
+        },
+        'ORD-MOCK-03-1': {
+          itemCount: 1,
+          items: [
+            { name: 'Trà trái cây nhiệt đới', sku: 'TR-NHT-01', serveType: 'dine_in', duration: '4h', quantity: 1, price: 35000 }
+          ]
+        },
+        'ORD-MOCK-03-2': {
+          itemCount: 1,
+          items: [
+            { name: 'Đẹp da', sku: 'NE-DEP-01', serveType: 'dine_in', duration: 'all_day', quantity: 1, price: 45000 }
+          ]
+        }
+      };
+
+      // Merge mock metadata with actual ones
+      metadata = { ...mockMetadata, ...metadata };
+      localStorage.setItem('pos_orders_metadata', JSON.stringify(metadata));
+      setOrdersMetadata(metadata);
     } catch (e) {
       console.error(e);
     }
@@ -433,7 +487,16 @@ export default function PosTablesPage() {
               const uniqueKey = `${card.id}-${card.cardNumber}-${idx}`;
 
               return (
-                <div key={uniqueKey} className={`table-card-box ${statusColor}`}>
+                <div 
+                  key={uniqueKey} 
+                  className={`table-card-box ${statusColor} ${activeSession ? 'clickable' : ''}`}
+                  onClick={() => {
+                    if (activeSession) {
+                      setSelectedSessionForDetail(activeSession);
+                    }
+                  }}
+                  style={activeSession ? { cursor: 'pointer' } : {}}
+                >
                   {/* Card Header Section */}
                   <div className="table-card-header">
                     <span className="table-card-number">#{card.cardNumber}</span>
@@ -454,14 +517,20 @@ export default function PosTablesPage() {
                         <>
                           <button 
                             className="card-plus-btn"
-                            onClick={() => navigate('/pos/sales')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate('/pos/sales');
+                            }}
                             title="Thêm món"
                           >
                             <Plus size={16} />
                           </button>
                           <button 
                             className="card-checkout-btn"
-                            onClick={() => handleRelease(card.cardNumber)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRelease(card.cardNumber);
+                            }}
                           >
                             CHECK OUT
                           </button>
@@ -469,14 +538,20 @@ export default function PosTablesPage() {
                       ) : statusColor === 'locked' ? (
                         <button 
                           className="card-wide-unlock-btn"
-                          onClick={() => handleToggleLock(card)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleLock(card);
+                          }}
                         >
                           MỞ KHÓA
                         </button>
                       ) : (
                         <button 
                           className="card-wide-plus-btn"
-                          onClick={() => navigate('/pos/sales')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate('/pos/sales');
+                          }}
                           title="Tạo phiên thẻ mới"
                         >
                           <Plus size={20} />
@@ -490,6 +565,127 @@ export default function PosTablesPage() {
           </div>
         )}
       </div>
+
+      {/* Modal Chi tiết bàn */}
+      {selectedSessionForDetail && (
+        <div className="tables-modal-overlay" onClick={() => setSelectedSessionForDetail(null)}>
+          <div className="tables-detail-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="tables-sheet-header">
+              <h2 className="tables-sheet-title">Chi Tiết Bàn #{selectedSessionForDetail.card.cardNumber}</h2>
+              <button className="tables-sheet-close" onClick={() => setSelectedSessionForDetail(null)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="tables-sheet-body">
+              <div className="tables-detail-info-grid">
+                <div className="tables-info-item">
+                  <span className="tables-info-label">Mã đơn hàng:</span>
+                  <span className="tables-info-value font-mono">{selectedSessionForDetail.orderId}</span>
+                </div>
+                <div className="tables-info-item">
+                  <span className="tables-info-label">Giờ vào:</span>
+                  <span className="tables-info-value">
+                    {new Date(selectedSessionForDetail.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <div className="tables-info-item">
+                  <span className="tables-info-label">Dự kiến ra:</span>
+                  <span className="tables-info-value">
+                    {new Date(selectedSessionForDetail.endTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <div className="tables-info-item">
+                  <span className="tables-info-label">Thời gian còn lại:</span>
+                  <span className="tables-info-value font-bold">
+                    {(() => {
+                      const remainingTimeMs = new Date(selectedSessionForDetail.endTime).getTime() - currentTime.getTime();
+                      const isOverdue = remainingTimeMs < 0;
+                      const elapsedMs = Math.abs(remainingTimeMs);
+                      const hours = Math.floor(elapsedMs / (3600 * 1000));
+                      const mins = Math.floor((elapsedMs % (3600 * 1000)) / (60 * 1000));
+                      const secs = Math.floor((elapsedMs % (60 * 1000)) / 1000);
+                      const pad = (n: number) => n.toString().padStart(2, '0');
+                      return `${isOverdue ? '-' : ''}${pad(hours)}:${pad(mins)}:${pad(secs)}`;
+                    })()}
+                  </span>
+                </div>
+              </div>
+
+              <div className="tables-products-section">
+                <h3 className="tables-section-title">Danh sách món nước & dịch vụ</h3>
+                <div className="tables-products-table-wrapper">
+                  <table className="tables-products-table">
+                    <thead>
+                      <tr>
+                        <th>Tên sản phẩm</th>
+                        <th>Loại phục vụ</th>
+                        <th style={{ textAlign: 'center' }}>SL</th>
+                        <th style={{ textAlign: 'right' }}>Đơn giá</th>
+                        <th style={{ textAlign: 'right' }}>Tổng</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        const metadata = ordersMetadata[selectedSessionForDetail.orderId];
+                        const items = metadata?.items || [];
+                        if (items.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={5} className="tables-no-products">
+                                Chưa có thông tin chi tiết món cho đơn hàng này.
+                              </td>
+                            </tr>
+                          );
+                        }
+                        return items.map((item, index) => {
+                          const is4h = item.serveType === 'dine_in' && item.duration === '4h';
+                          return (
+                            <tr key={index} className={is4h ? 'row-highlight-4h' : ''}>
+                              <td className="font-semibold">{item.name}</td>
+                              <td>
+                                {item.serveType === 'takeaway' ? 'Mang đi' : `Tại chỗ (${item.duration === '4h' ? '4H' : 'Cả ngày'})`}
+                              </td>
+                              <td style={{ textAlign: 'center' }}>{item.quantity}</td>
+                              <td style={{ textAlign: 'right' }}>{item.price.toLocaleString('vi-VN')}đ</td>
+                              <td style={{ textAlign: 'right' }} className="font-bold">
+                                {(item.price * item.quantity).toLocaleString('vi-VN')}đ
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div className="tables-sheet-footer">
+              <div className="tables-sheet-total-row">
+                <span>Tổng cộng đơn:</span>
+                <span className="tables-total-price">
+                  {(() => {
+                    const metadata = ordersMetadata[selectedSessionForDetail.orderId];
+                    const items = metadata?.items || [];
+                    const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                    return total > 0 ? `${total.toLocaleString('vi-VN')}đ` : 'Chưa tính';
+                  })()}
+                </span>
+              </div>
+              <div className="tables-sheet-actions">
+                <button 
+                  className="tables-btn-checkout"
+                  onClick={() => {
+                    handleRelease(selectedSessionForDetail.card.cardNumber);
+                    setSelectedSessionForDetail(null);
+                  }}
+                >
+                  CHECK OUT (TRẢ THẺ)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

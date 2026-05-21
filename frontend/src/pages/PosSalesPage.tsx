@@ -359,11 +359,20 @@ export default function PosSalesPage() {
         orderId: orderId,
         duration: duration
       });
-      // Save metadata to LocalStorage for number of items
+      // Save metadata to LocalStorage for number of items and items detail list
       const savedMetadata = localStorage.getItem('pos_orders_metadata');
       const metadata = savedMetadata ? JSON.parse(savedMetadata) : {};
       metadata[orderId] = {
-        itemCount: totalItems
+        itemCount: totalItems,
+        items: cartItems.map(item => ({
+          name: item.product.name,
+          sku: item.product.sku,
+          serveType: item.serveType,
+          duration: item.duration,
+          quantity: item.quantity,
+          price: item.price,
+          note: item.note
+        }))
       };
       localStorage.setItem('pos_orders_metadata', JSON.stringify(metadata));
     } catch (err) {
