@@ -92,7 +92,7 @@ export default function PosChangePinPage() {
     value: string,
     pinState: string[],
     setPinState: React.Dispatch<React.SetStateAction<string[]>>,
-    refs: React.RefObject<HTMLInputElement>[],
+    refs: React.RefObject<HTMLInputElement | null>[],
     type: 'old' | 'new' | 'confirm'
   ) => {
     if (value && !/^\d+$/.test(value)) return;
@@ -132,7 +132,7 @@ export default function PosChangePinPage() {
     index: number,
     e: React.KeyboardEvent<HTMLInputElement>,
     pinState: string[],
-    refs: React.RefObject<HTMLInputElement>[]
+    refs: React.RefObject<HTMLInputElement | null>[]
   ) => {
     if (e.key === 'Backspace' && !pinState[index] && index > 0) {
       refs[index - 1].current?.focus();
@@ -143,7 +143,7 @@ export default function PosChangePinPage() {
     label: string,
     pinState: string[],
     setPinState: React.Dispatch<React.SetStateAction<string[]>>,
-    refs: React.RefObject<HTMLInputElement>[],
+    refs: React.RefObject<HTMLInputElement | null>[],
     type: 'old' | 'new' | 'confirm',
     showPin: boolean,
     setShowPin: React.Dispatch<React.SetStateAction<boolean>>,

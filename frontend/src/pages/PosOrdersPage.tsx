@@ -18,7 +18,7 @@ export default function PosOrdersPage() {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [ordersMetadata, setOrdersMetadata] = useState<any>({});
+  const [ordersMetadata] = useState<any>({});
   
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [selectedCardForPopup, setSelectedCardForPopup] = useState<any>(null);
@@ -360,7 +360,7 @@ export default function PosOrdersPage() {
                 <span className="tables-total-price">
                   {(() => {
                     const items = ordersMetadata[selectedCardForPopup.orderId]?.items || [];
-                    const total = items.reduce((sum, item: any) => {
+                    const total = items.reduce((sum: number, item: any) => {
                       const unitPrice = item.serveType === 'takeaway' ? 25000 : (item.duration === '4h' ? 35000 : 45000);
                       return sum + (unitPrice * item.quantity);
                     }, 0);

@@ -413,7 +413,7 @@ export default function PosSalesPage() {
         items: metadata[orderId].items,
         totalAmount: cartItems.reduce((sum, i) => sum + (i.price * i.quantity), 0),
         paymentMethod: paymentMethod === 'cash' ? 'Tiền mặt' : 'Chuyển khoản',
-        status: duration === 'takeaway' ? 'Hoàn thành' : 'Đang dùng',
+        status: cartItems.every(i => i.serveType === 'takeaway') ? 'Hoàn thành' : 'Đang dùng',
         createdAt: new Date().toISOString(),
         creator: localStorage.getItem('staffEmail') || 'Unknown'
       });
