@@ -42,9 +42,9 @@ export default function RoleSelectionPage() {
         </button>
       </div>
 
-      <div className="role-register">
+      {/* <div className="role-register">
         Chưa có tài khoản? <Link to="/register">Đăng Ký</Link>
-      </div>
+      </div> */}
     </div>
   );
 }

@@ -46,8 +46,16 @@ public class StaffController {
         String phone = request.get("phone");
         String pin = request.get("pin");
 
-        if (userRepository.findByEmail(email).isPresent()) {
-            return ResponseEntity.badRequest().body(Map.of("message", "Email already in use"));
+        Optional<User> existingUserOpt = userRepository.findByEmail(email);
+        if (existingUserOpt.isPresent()) {
+            User existingUser = existingUserOpt.get();
+            if (existingUser.getStatus() == UserStatus.PENDING) {
+                return ResponseEntity.badRequest().body(Map.of("message", "Email này đã được đăng ký và đang chờ duyệt!"));
+            } else if (existingUser.getStatus() == UserStatus.APPROVED) {
+                return ResponseEntity.badRequest().body(Map.of("message", "Email này đã có tài khoản hoạt động. Vui lòng đăng nhập!"));
+            } else {
+                return ResponseEntity.badRequest().body(Map.of("message", "Email này đã được sử dụng."));
+            }
         }
 
         User staff = new User();

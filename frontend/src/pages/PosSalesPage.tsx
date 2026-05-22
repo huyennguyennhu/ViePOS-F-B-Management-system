@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Search, Calculator, X, Minus, Plus, ChevronLeft, Edit2, Trash2, Camera } from 'lucide-react';
-import { productAPI, cardAPI } from '../services/api';
+import { productAPI, cardAPI, orderAPI } from '../services/api';
 import arrowWhite from '../../assets/icon/arrow_white.png';
 import './PosSalesPage.css';
 
@@ -65,6 +66,7 @@ const INITIAL_PRODUCTS: Product[] = [
 const INITIAL_CATEGORIES = ['Tất cả', 'Cà phê', 'Trà sữa', 'Nước ép', 'Trà', 'Ăn vặt'];
 
 export default function PosSalesPage() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tất cả');
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
@@ -87,7 +89,12 @@ export default function PosSalesPage() {
   // States cho Chọn thẻ
   const [isCardSelectionOpen, setIsCardSelectionOpen] = useState(false);
   const [freeCards, setFreeCards] = useState<BackendCard[]>([]);
-  const [selectedCardNumber, setSelectedCardNumber] = useState<string | null>(null);
+  
+  const location = useLocation();
+  const lockedCardNumber = location.state?.lockedCardNumber as string | undefined;
+  
+  const [selectedCardNumber, setSelectedCardNumber] = useState<string | null>(lockedCardNumber || null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // State cho Popup xác nhận xóa
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -101,6 +108,7 @@ export default function PosSalesPage() {
     open: boolean;
     title: string;
     message: string;
+    displayId?: string;
   }>({ open: false, title: '', message: '' });
 
   const showConfirm = (message: string, onConfirm: () => void) => {
@@ -136,7 +144,7 @@ export default function PosSalesPage() {
         basePrice = 45000;
       }
     }
-    return basePrice * quantity;
+    return basePrice;
   };
 
   // Mở popup
@@ -231,7 +239,7 @@ export default function PosSalesPage() {
         if (existing.serveType === 'dine_in') {
           basePrice = existing.duration === '4h' ? 35000 : 45000;
         }
-        existing.price = basePrice * existing.quantity;
+        existing.price = basePrice;
       } else {
         let basePrice = 25000;
         if (item.serveType === 'dine_in') {
@@ -293,7 +301,7 @@ export default function PosSalesPage() {
             basePrice = 45000;
           }
         }
-        return { ...item, quantity: newQuantity, price: basePrice * newQuantity };
+        return { ...item, quantity: newQuantity, price: basePrice };
       }
       return item;
     }));
@@ -318,11 +326,12 @@ export default function PosSalesPage() {
   const handleCompletePayment = async () => {
     try {
       const res = await cardAPI.getFreeCards();
-      setFreeCards(res.data);
+      const sortedCards = [...res.data].sort((a, b) => parseInt(a.cardNumber) - parseInt(b.cardNumber));
+      setFreeCards(sortedCards);
     } catch (err) {
       console.error("Không thể tải danh sách thẻ trống:", err);
       // Fallback data
-      setFreeCards([
+      const mockCards = [
         { id: 1, cardNumber: "06", status: "trống" },
         { id: 2, cardNumber: "09", status: "trống" },
         { id: 3, cardNumber: "10", status: "trống" },
@@ -333,7 +342,8 @@ export default function PosSalesPage() {
         { id: 8, cardNumber: "20", status: "trống" },
         { id: 9, cardNumber: "21", status: "trống" },
         { id: 10, cardNumber: "23", status: "trống" },
-      ]);
+      ];
+      setFreeCards(mockCards.sort((a, b) => parseInt(a.cardNumber) - parseInt(b.cardNumber)));
     }
     setSelectedCardNumber(null);
     setIsCardSelectionOpen(true);
@@ -346,11 +356,24 @@ export default function PosSalesPage() {
       alert('Vui lòng chọn một thẻ!');
       return;
     }
+    
+    setIsSubmitting(true);
 
     // Check if there is any 4h duration in cart items
     const has4h = cartItems.some(item => item.serveType === 'dine_in' && item.duration === '4h');
     const duration = has4h ? '4h' : 'all_day';
-    const orderId = 'ORD-' + Date.now().toString();
+
+    // Lấy mã đơn từ backend
+    let orderId = `FALLBACK-${Date.now()}`;
+    let displayId = orderId;
+    try {
+      const orderRes = await orderAPI.getNextId();
+      orderId = orderRes.data.orderId;     // VD: HCM01-260522-0001
+      displayId = orderRes.data.displayId; // VD: 0001
+    } catch (err) {
+      console.error('Không thể lấy mã đơn từ backend, dùng fallback:', err);
+    }
+
     const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
     try {
@@ -359,11 +382,13 @@ export default function PosSalesPage() {
         orderId: orderId,
         duration: duration
       });
-      // Save metadata to LocalStorage for number of items and items detail list
+      // Save metadata to LocalStorage for fallback
       const savedMetadata = localStorage.getItem('pos_orders_metadata');
       const metadata = savedMetadata ? JSON.parse(savedMetadata) : {};
       metadata[orderId] = {
         itemCount: totalItems,
+        displayId: displayId,
+        initial4hCount: cartItems.filter(i => i.duration === '4h' && i.serveType === 'dine_in').reduce((sum, i) => sum + i.quantity, 0),
         items: cartItems.map(item => ({
           name: item.product.name,
           sku: item.product.sku,
@@ -376,13 +401,15 @@ export default function PosSalesPage() {
       };
       localStorage.setItem('pos_orders_metadata', JSON.stringify(metadata));
     } catch (err) {
-      console.error("Lỗi khi tạo phiên thẻ:", err);
+      console.error('Lỗi khi tạo phiên thẻ:', err);
     }
-
+    
+    setIsSubmitting(false);
     setSuccessDialog({
       open: true,
       title: 'Tạo Đơn Thành Công!',
-      message: `Đơn hàng đã được thanh toán. Bắt đầu phiên thẻ số ${selectedCardNumber}.`
+      message: `Đơn hàng đã được thanh toán. Bắt đầu phiên thẻ số ${selectedCardNumber}.`,
+      displayId: displayId
     });
     setCartItems([]);
     setIsCardSelectionOpen(false);
@@ -390,15 +417,114 @@ export default function PosSalesPage() {
   };
 
   // Bỏ qua chọn thẻ và kết thúc
-  const handleSkipCardSelection = () => {
-    setSuccessDialog({
-      open: true,
-      title: 'Tạo Đơn Thành Công!',
-      message: 'Đơn hàng mang đi đã được ghi nhận và thanh toán.'
-    });
-    setCartItems([]);
-    setIsCardSelectionOpen(false);
-    setIsCartOpen(false);
+  const handleSkipCardSelection = async () => {
+    if (lockedCardNumber) {
+      setIsSubmitting(true);
+      try {
+        // Find active session for this card
+        const sessionsRes = await cardAPI.getSessions();
+        const activeSession = sessionsRes.data.find((s: any) => s.card.cardNumber === lockedCardNumber && !s.actualEndTime && s.status !== 'Hoàn thành');
+        
+        if (activeSession) {
+          const savedMetadata = localStorage.getItem('pos_orders_metadata');
+          const metadata = savedMetadata ? JSON.parse(savedMetadata) : {};
+          const orderId = activeSession.orderId;
+          const orderMetadata = metadata[orderId] || {};
+          const originalItems = orderMetadata.items || [];
+          
+          let initial4hCount = orderMetadata.initial4hCount;
+          if (initial4hCount === undefined) {
+             initial4hCount = originalItems
+                .filter((i: any) => i.duration === '4h' && i.serveType === 'dine_in')
+                .reduce((sum: number, i: any) => sum + (i.quantity || 1), 0);
+          }
+
+          const originalAllDayCount = originalItems
+            .filter((i: any) => i.duration === 'all_day' && i.serveType === 'dine_in')
+            .reduce((sum: number, i: any) => sum + (i.quantity || 1), 0);
+          
+          let currentEndTime = new Date(activeSession.endTime);
+          const match = activeSession.endTime.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+          if (match && !activeSession.endTime.endsWith('Z') && !/([+-]\d{2}:\d{2})$/.test(activeSession.endTime)) {
+            currentEndTime = new Date(
+              parseInt(match[1]),
+              parseInt(match[2]) - 1,
+              parseInt(match[3]),
+              parseInt(match[4]),
+              parseInt(match[5]),
+              parseInt(match[6])
+            );
+          }
+          
+          const new4hCount = cartItems
+            .filter(i => i.duration === '4h' && i.serveType === 'dine_in')
+            .reduce((sum, i) => sum + i.quantity, 0);
+            
+          const newAllDayCount = cartItems
+            .filter(i => i.duration === 'all_day' && i.serveType === 'dine_in')
+            .reduce((sum, i) => sum + i.quantity, 0);
+            
+          const totalAllDayCount = originalAllDayCount + newAllDayCount;
+          
+          let extendTime = false;
+          let newEndTime = currentEndTime;
+
+          if (new4hCount > 0) {
+            newEndTime = new Date(newEndTime.getTime() + 4 * 60 * 60 * 1000);
+            extendTime = true;
+          }
+
+          if (totalAllDayCount >= initial4hCount && initial4hCount > 0) {
+            newEndTime = new Date();
+            newEndTime.setHours(22, 0, 0, 0);
+            extendTime = true;
+          }
+
+          if (extendTime) {
+            const pad = (n: number) => n.toString().padStart(2, '0');
+            const formattedDate = `${newEndTime.getFullYear()}-${pad(newEndTime.getMonth() + 1)}-${pad(newEndTime.getDate())}T${pad(newEndTime.getHours())}:${pad(newEndTime.getMinutes())}:${pad(newEndTime.getSeconds())}`;
+            await cardAPI.extendSession(lockedCardNumber, formattedDate);
+          }
+
+          // Append items to metadata
+          const formattedCartItems = cartItems.map(item => ({
+            name: item.product.name,
+            sku: item.product.sku,
+            serveType: item.serveType,
+            duration: item.duration,
+            quantity: item.quantity,
+            price: item.price,
+            note: item.note
+          }));
+
+          if (!metadata[orderId]) {
+             metadata[orderId] = { itemCount: 0, items: [] };
+          }
+          metadata[orderId].items = [...originalItems, ...formattedCartItems];
+          metadata[orderId].itemCount = metadata[orderId].items.reduce((sum: number, i: any) => sum + i.quantity, 0);
+          
+          localStorage.setItem('pos_orders_metadata', JSON.stringify(metadata));
+        }
+      } catch (e) {
+        console.error("Lỗi khi cập nhật thời gian / thêm món:", e);
+      } finally {
+        setIsSubmitting(false);
+      }
+      
+      setCartItems([]);
+      setIsCardSelectionOpen(false);
+      setIsCartOpen(false);
+      navigate('/pos/tables', { state: { openCardNumber: lockedCardNumber } });
+    } else {
+      setCartItems([]);
+      setIsCardSelectionOpen(false);
+      setIsCartOpen(false);
+      setSuccessDialog({
+        open: true,
+        title: 'Tạo Đơn Thành Công!',
+        message: 'Đơn hàng mang đi đã được ghi nhận và thanh toán.'
+      });
+    }
   };
 
   // Nhấn bàn phím số
@@ -480,7 +606,7 @@ export default function PosSalesPage() {
     return map[categoryName] || '#349409';
   };
 
-  const tempTotal = cartItems.reduce((sum, item) => sum + item.price, 0);
+  const tempTotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const discountAmount = (tempTotal * discountPercent) / 100;
   const finalTotal = tempTotal - discountAmount;
 
@@ -752,7 +878,7 @@ export default function PosSalesPage() {
                           </button>
                         </div>
                         
-                        <div className="pos-cart-item-price">{item.price.toLocaleString('vi-VN')}đ</div>
+                        <div className="pos-cart-item-price">{(item.price * item.quantity).toLocaleString('vi-VN')}đ</div>
                         
                         <div className="pos-cart-item-actions">
                           <div className="pos-quantity-control">
@@ -851,6 +977,14 @@ export default function PosSalesPage() {
               </svg>
             </div>
             <h3 className="pos-success-dialog-title">{successDialog.title}</h3>
+            {successDialog.displayId && (
+              <div style={{ textAlign: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '13px', color: '#666' }}>Mã đơn khách hàng</span>
+                <div style={{ fontSize: '36px', fontWeight: 800, color: '#349409', letterSpacing: '4px', lineHeight: 1.2 }}>
+                  {successDialog.displayId}
+                </div>
+              </div>
+            )}
             <p className="pos-confirm-message">{successDialog.message}</p>
             <div className="pos-confirm-actions">
               <button 
@@ -1101,47 +1235,69 @@ export default function PosSalesPage() {
               <h2 className="pos-card-success-title">Thanh Toán Hoàn Tất!</h2>
             </div>
 
-            {/* Title Section */}
-            <div className="pos-card-selection-subheader">
-              <span className="pos-card-selection-title">Thẻ trống</span>
-              <span className="pos-card-selection-count">({freeCards.length})</span>
-            </div>
+            {lockedCardNumber ? (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', fontSize: '20px', color: '#333', fontWeight: 600 }}>
+                Đã gán vào thẻ <strong style={{ color: '#349409', fontSize: '28px', marginLeft: '8px' }}>#{lockedCardNumber}</strong>
+              </div>
+            ) : (
+              <>
+                {/* Title Section */}
+                <div className="pos-card-selection-subheader">
+                  <span className="pos-card-selection-title">Thẻ trống</span>
+                  <span className="pos-card-selection-count">({freeCards.length})</span>
+                </div>
 
-            {/* Grid List of Free Cards */}
-            <div className="pos-card-selection-grid">
-              {freeCards.map((card) => {
-                const isSelected = selectedCardNumber === card.cardNumber;
-                return (
-                  <button
-                    key={card.id}
-                    className={`pos-card-selection-btn ${isSelected ? 'active' : ''}`}
-                    onClick={() => setSelectedCardNumber(card.cardNumber)}
-                  >
-                    {card.cardNumber}
-                  </button>
-                );
-              })}
-            </div>
+                {/* Grid List of Free Cards */}
+                <div className="pos-card-selection-grid">
+                  {freeCards.map((card) => {
+                    const isSelected = selectedCardNumber === card.cardNumber;
+                    return (
+                      <button
+                        key={card.id}
+                        className={`pos-card-selection-btn ${isSelected ? 'active' : ''}`}
+                        onClick={() => setSelectedCardNumber(card.cardNumber)}
+                        disabled={isSubmitting}
+                      >
+                        {card.cardNumber}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
 
             {/* Action Buttons */}
             <div className="pos-card-selection-footer">
-              {(isTakeawayOnly || (hasAllDay && !has4h)) && (
+              {lockedCardNumber ? (
                 <button 
                   className="pos-card-btn-skip"
                   onClick={handleSkipCardSelection}
+                  disabled={isSubmitting}
                 >
-                  BỎ QUA
+                  {isSubmitting ? 'ĐANG XỬ LÝ...' : 'BỎ QUA'}
                 </button>
-              )}
-              
-              {!isTakeawayOnly && (
-                <button 
-                  className="pos-card-btn-select"
-                  disabled={!selectedCardNumber}
-                  onClick={handleSelectCardSelection}
-                >
-                  {has4h ? 'CHỌN' : 'XONG'}
-                </button>
+              ) : (
+                <>
+                  {(isTakeawayOnly || (hasAllDay && !has4h)) && (
+                    <button 
+                      className="pos-card-btn-skip"
+                      onClick={handleSkipCardSelection}
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? 'ĐANG XỬ LÝ...' : 'BỎ QUA'}
+                    </button>
+                  )}
+                  
+                  {!isTakeawayOnly && (
+                    <button 
+                      className="pos-card-btn-select"
+                      disabled={!selectedCardNumber || isSubmitting}
+                      onClick={handleSelectCardSelection}
+                    >
+                      {isSubmitting ? 'ĐANG XỬ LÝ...' : (has4h ? 'CHỌN' : 'XONG')}
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>

@@ -6,4 +6,6 @@ import java.util.List;
 
 public interface CardSessionRepository extends JpaRepository<CardSession, Long> {
     List<CardSession> findByStatus(String status);
+    List<CardSession> findByCardCardNumberAndStatus(String cardNumber, String status);
+    List<CardSession> findByStatusNot(String status);
 }

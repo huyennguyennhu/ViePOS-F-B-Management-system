@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { cardAPI } from '../services/api';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { cardAPI, productAPI } from '../services/api';
 import { Plus, AlertTriangle, RefreshCw, Search, X } from 'lucide-react';
 import './PosTablesPage.css';
 
@@ -20,25 +20,94 @@ interface CardSession {
   status: string; // "Đang sử dụng", "Hoàn thành", "Quá giờ"
 }
 
-// Custom SVG Icon for Settings Filter
-/* const FilterSettingsIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="4" y1="21" x2="4" y2="14" />
-    <line x1="4" y1="10" x2="4" y2="3" />
-    <line x1="12" y1="21" x2="12" y2="12" />
-    <line x1="12" y1="8" x2="12" y2="3" />
-    <line x1="20" y1="21" x2="20" y2="16" />
-    <line x1="20" y1="12" x2="20" y2="3" />
-    <line x1="2" y1="14" x2="6" y2="14" />
-    <line x1="10" y1="8" x2="14" y2="8" />
-    <line x1="18" y1="12" x2="22" y2="12" />
-  </svg>
-); */
+interface Category {
+  id: number;
+  name: string;
+}
+
+interface Product {
+  id: number;
+  sku: string;
+  name: string;
+  imageUrl: string | null;
+  status: string;
+  category: Category;
+}
+
+const INITIAL_PRODUCTS: Product[] = [
+  { id: 1, sku: 'CF-DEN-01', name: 'Cà phê đen', imageUrl: null, status: 'Đang bán', category: { id: 1, name: 'Cà phê' } },
+  { id: 2, sku: 'CF-SUA-02', name: 'Cà phê sữa', imageUrl: null, status: 'Đang bán', category: { id: 1, name: 'Cà phê' } },
+  { id: 3, sku: 'TS-DAC-01', name: 'Trà sữa đặc sản', imageUrl: null, status: 'Đang bán', category: { id: 2, name: 'Trà sữa' } },
+  { id: 4, sku: 'TS-TRU-02', name: 'Trà sữa truyền thống', imageUrl: null, status: 'Đang bán', category: { id: 2, name: 'Trà sữa' } },
+  { id: 5, sku: 'NE-DEP-01', name: 'Đẹp da', imageUrl: null, status: 'Đang bán', category: { id: 3, name: 'Nước ép' } },
+  { id: 6, sku: 'NE-DAN-02', name: 'Đẹp dáng', imageUrl: null, status: 'Đang bán', category: { id: 3, name: 'Nước ép' } },
+  { id: 7, sku: 'TR-NHT-01', name: 'Trà trái cây nhiệt đới', imageUrl: null, status: 'Đang bán', category: { id: 4, name: 'Trà' } },
+  { id: 8, sku: 'TR-MAN-02', name: 'Trà mãng cầu', imageUrl: null, status: 'Đang bán', category: { id: 4, name: 'Trà' } },
+  { id: 9, sku: 'TR-OIH-03', name: 'Trà ổi hồng', imageUrl: null, status: 'Đang bán', category: { id: 4, name: 'Trà' } },
+  { id: 10, sku: 'TR-HIB-04', name: 'Trà Hibiscus', imageUrl: null, status: 'Đang bán', category: { id: 4, name: 'Trà' } },
+  { id: 11, sku: 'TR-XOA-05', name: 'Trà xoài chanh leo', imageUrl: null, status: 'Đang bán', category: { id: 4, name: 'Trà' } },
+  { id: 12, sku: 'TR-DET-06', name: 'Trà detox nóng', imageUrl: null, status: 'Đang bán', category: { id: 4, name: 'Trà' } },
+  { id: 13, sku: 'AV-MILY-01', name: 'Mì ly', imageUrl: null, status: 'Đang bán', category: { id: 5, name: 'Ăn vặt' } },
+  { id: 14, sku: 'AV-BGAU-02', name: 'Bánh gấu', imageUrl: null, status: 'Đang bán', category: { id: 5, name: 'Ăn vặt' } },
+  { id: 15, sku: 'AV-BQUE-03', name: 'Bánh que', imageUrl: null, status: 'Đang bán', category: { id: 5, name: 'Ăn vặt' } },
+  { id: 16, sku: 'AV-BTM-04', name: 'Bánh tai mèo', imageUrl: null, status: 'Đang bán', category: { id: 5, name: 'Ăn vặt' } }
+];
+
+// Helper function to robustly parse UTC server time to browser local time
+const parseServerDate = (dateStr: string | null | undefined): Date => {
+  if (!dateStr) return new Date();
+  const hasZ = dateStr.endsWith('Z');
+  const hasOffset = /([+-]\d{2}:\d{2})$/.test(dateStr);
+  const formattedStr = (hasZ || hasOffset) ? dateStr : `${dateStr}Z`;
+  return new Date(formattedStr);
+};
+
+// Helper function to dynamically decode cart products stored inside orderId
+const decodeOrderIdToItems = (orderId: string, allProducts: Product[]) => {
+  if (!orderId) return [];
+  const parts = orderId.split('-');
+  if (parts.length < 3) return [];
+  
+  const itemsPart = parts[2];
+  const itemStrings = itemsPart.split('|');
+  
+  return itemStrings.map(itemStr => {
+    const segments = itemStr.split('_');
+    if (segments.length < 4) return null;
+    const sku = segments[0];
+    const quantity = parseInt(segments[1]) || 1;
+    const serveType = segments[2] === 't' ? 'takeaway' : 'dine_in';
+    const duration = segments[3] === '4' ? '4h' : 'all_day';
+    
+    const product = allProducts.find(p => p.sku === sku);
+    if (!product) return null;
+    
+    let basePrice = 0;
+    if (serveType === 'takeaway') {
+      basePrice = 25000;
+    } else {
+      basePrice = duration === '4h' ? 35000 : 45000;
+    }
+    
+    return {
+      name: product.name,
+      sku: product.sku,
+      serveType,
+      duration,
+      quantity,
+      price: basePrice,
+      note: ''
+    };
+  }).filter((item): item is NonNullable<typeof item> => item !== null);
+};
 
 export default function PosTablesPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const openCardNumber = location.state?.openCardNumber as string | undefined;
   const [cards, setCards] = useState<Card[]>([]);
   const [sessions, setSessions] = useState<CardSession[]>([]);
+  const [productList, setProductList] = useState<Product[]>(INITIAL_PRODUCTS);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -63,6 +132,12 @@ export default function PosTablesPage() {
 
   const [selectedSessionForDetail, setSelectedSessionForDetail] = useState<CardSession | null>(null);
 
+  // Trả thẻ popup states
+  const [releaseConfirmCard, setReleaseConfirmCard] = useState<string | null>(null);
+  const [releaseSuccessCard, setReleaseSuccessCard] = useState<string | null>(null);
+  const [releaseLoading, setReleaseLoading] = useState(false);
+  const [releaseError, setReleaseError] = useState<string | null>(null);
+
   // Real-time ticking timer
   useEffect(() => {
     const timer = setInterval(() => {
@@ -70,6 +145,26 @@ export default function PosTablesPage() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Auto-open detail popup if navigated back from add-items flow
+  useEffect(() => {
+    if (!openCardNumber || sessions.length === 0) return;
+    const session = sessions.find(
+      s => s.card.cardNumber === openCardNumber && !s.actualEndTime && s.status !== 'Hoàn thành'
+    );
+    if (session) {
+      setSelectedSessionForDetail(session);
+      // Clear the state so it doesn't re-open on re-render
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [openCardNumber, sessions, location.pathname, navigate]);
+
+  // Auto-close success popup after 2.5s
+  useEffect(() => {
+    if (!releaseSuccessCard) return;
+    const t = setTimeout(() => setReleaseSuccessCard(null), 2500);
+    return () => clearTimeout(t);
+  }, [releaseSuccessCard]);
 
   // Fetch orders metadata from localStorage
   useEffect(() => {
@@ -126,8 +221,18 @@ export default function PosTablesPage() {
     setLoading(true);
     setErrorMessage(null);
     try {
-      const cardsRes = await cardAPI.getCards();
-      const sessionsRes = await cardAPI.getSessions();
+      const [cardsRes, sessionsRes, productsRes] = await Promise.all([
+        cardAPI.getCards(),
+        cardAPI.getSessions(),
+        productAPI.getProducts().catch(errProd => {
+          console.error('Không thể tải danh sách sản phẩm từ backend, sử dụng dữ liệu mặc định:', errProd);
+          return null;
+        })
+      ]);
+
+      if (productsRes?.data) {
+        setProductList(productsRes.data);
+      }
       
       // Sort cards by card number ascending
       const sortedCards = [...cardsRes.data].sort((a, b) => 
@@ -137,7 +242,7 @@ export default function PosTablesPage() {
       
       // Sort sessions by start time descending
       const sortedSessions = [...sessionsRes.data].sort((a, b) => 
-        new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+        parseServerDate(b.startTime).getTime() - parseServerDate(a.startTime).getTime()
       );
       setSessions(sortedSessions);
     } catch (err) {
@@ -156,25 +261,19 @@ export default function PosTablesPage() {
       ]);
 
       const now = new Date();
-      // Card 04: Overdue by 2m 43s (started 4h ago, end 4h after start, but let's mock endTime to be exactly now - 2m 43s)
       const start4 = new Date(now.getTime() - (4 * 60 * 60 + 2 * 60 + 43) * 1000);
       const end4 = new Date(start4.getTime() + 4 * 60 * 60 * 1000); // overdue now
       
-      // Card 08: Near overdue (remaining 14m 2s)
       const start8 = new Date(now.getTime() - (3 * 60 * 60 + 45 * 60 + 58) * 1000);
       const end8 = new Date(start8.getTime() + 4 * 60 * 60 * 1000); // 14m 2s left
 
-      // Card 08 duplicate: Near overdue (remaining 14m 2s)
       const start8_2 = new Date(now.getTime() - (3 * 60 * 60 + 45 * 60 + 58) * 1000);
       const end8_2 = new Date(start8_2.getTime() + 4 * 60 * 60 * 1000);
 
-      // Card 03: Green active 4H (started 5m 17s ago, 4h duration)
       const start3 = new Date(now.getTime() - (5 * 60 + 17) * 1000);
       const end3 = new Date(start3.getTime() + 4 * 60 * 60 * 1000); // 3h 54m 43s left
 
-      // Card 03 duplicate: Green active Cả ngày (started 1h ago, all_day)
       const start3_2 = new Date(now.getTime() - 1 * 60 * 60 * 1000);
-      // All day end time is 22:00 today
       const end3_2 = new Date(now);
       end3_2.setHours(22, 0, 0, 0);
 
@@ -234,16 +333,34 @@ export default function PosTablesPage() {
     fetchData();
   }, []);
 
-  const handleRelease = async (cardNumber: string) => {
-    const confirmRelease = window.confirm(`Bạn có chắc chắn muốn CHECK OUT (trả thẻ) số ${cardNumber}?`);
-    if (!confirmRelease) return;
+  const handleRelease = (cardNumber: string) => {
+    setReleaseConfirmCard(cardNumber);
+    setReleaseError(null);
+  };
+
+  const handleReleaseConfirmed = async () => {
+    if (!releaseConfirmCard) return;
+    setReleaseLoading(true);
+    setReleaseError(null);
+    setSelectedSessionForDetail(null); // Đóng ngay popup chi tiết
     try {
-      await cardAPI.releaseCard(cardNumber);
-      alert(`Đã trả thẻ số ${cardNumber} thành công!`);
-      fetchData();
+      await cardAPI.releaseCard(releaseConfirmCard);
+      // Update state locally - no full reload
+      setCards(prev => prev.map(c =>
+        c.cardNumber === releaseConfirmCard ? { ...c, status: 'trống' } : c
+      ));
+      setSessions(prev => prev.map(s =>
+        s.card.cardNumber === releaseConfirmCard && !s.actualEndTime
+          ? { ...s, actualEndTime: new Date().toISOString(), status: 'Hoàn thành' }
+          : s
+      ));
+      setReleaseConfirmCard(null);
+      setReleaseSuccessCard(releaseConfirmCard);
     } catch (err) {
       console.error(err);
-      alert('Không thể thực hiện trả thẻ.');
+      setReleaseError('Không thể thực hiện trả thẻ. Vui lòng thử lại.');
+    } finally {
+      setReleaseLoading(false);
     }
   };
 
@@ -277,15 +394,14 @@ export default function PosTablesPage() {
     if (selectedFilter === 'all') return true;
 
     if (!activeSession) {
-      // If filtering for active sessions or specific times, free/locked cards should be hidden
       return false;
     }
 
-    const diffMs = new Date(activeSession.endTime).getTime() - new Date(activeSession.startTime).getTime();
-    const is4h = Math.abs(diffMs - 4 * 60 * 60 * 1000) < 60000;
+    const diffMs = parseServerDate(activeSession.endTime).getTime() - parseServerDate(activeSession.startTime).getTime();
+    const is4h = [4, 8, 12, 16, 20, 24].some(h => Math.abs(diffMs - h * 60 * 60 * 1000) < 60000);
     const durationType = is4h ? '4h' : 'all_day';
 
-    const remainingTimeMs = new Date(activeSession.endTime).getTime() - currentTime.getTime();
+    const remainingTimeMs = parseServerDate(activeSession.endTime).getTime() - currentTime.getTime();
     const isOverdue = remainingTimeMs < 0;
     const isNearOverdue = !isOverdue && remainingTimeMs <= 15 * 60 * 1000;
 
@@ -311,7 +427,7 @@ export default function PosTablesPage() {
     );
 
     if (activeSession) {
-      const remainingTimeMs = new Date(activeSession.endTime).getTime() - currentTime.getTime();
+      const remainingTimeMs = parseServerDate(activeSession.endTime).getTime() - currentTime.getTime();
       const isOverdue = remainingTimeMs < 0;
       const isNearOverdue = !isOverdue && remainingTimeMs <= 15 * 60 * 1000;
 
@@ -324,13 +440,27 @@ export default function PosTablesPage() {
     return 4; // Trống (Grey)
   };
 
+  const getCardRemainingTime = (card: Card) => {
+    const activeSession = sessions.find(
+      s => s.card.cardNumber === card.cardNumber &&
+           s.status !== 'Hoàn thành' &&
+           !s.actualEndTime
+    );
+    if (activeSession) {
+      return parseServerDate(activeSession.endTime).getTime() - currentTime.getTime();
+    }
+    return Infinity;
+  };
+
   const sortedCards = [...filteredCards].sort((a, b) => {
     const weightA = getCardStatusWeight(a);
     const weightB = getCardStatusWeight(b);
     if (weightA !== weightB) {
       return weightA - weightB;
     }
-    // Secondary sort by card number ascending
+    if (weightA <= 3) {
+      return getCardRemainingTime(a) - getCardRemainingTime(b);
+    }
     return parseInt(a.cardNumber) - parseInt(b.cardNumber);
   });
 
@@ -338,7 +468,7 @@ export default function PosTablesPage() {
     <div className="pos-tables-page">
       {/* Centered Header with subtitle/action */}
       <div className="tables-header-centered">
-        <div style={{ width: '36px' }}></div> {/* Spacer to align title center */}
+        <div style={{ width: '36px' }}></div>
         <h1 className="tables-title-text">Bàn</h1>
         <button className="btn-refresh-subtle" onClick={fetchData} disabled={loading}>
           <RefreshCw size={16} className={loading ? 'spinning' : ''} />
@@ -363,9 +493,6 @@ export default function PosTablesPage() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        {/* <button className="tables-filter-btn" title="Bộ lọc">
-          <FilterSettingsIcon />
-        </button> */}
       </div>
 
       {/* Pill Filter Container */}
@@ -396,9 +523,9 @@ export default function PosTablesPage() {
             Sắp hết giờ
           </button>
         </div>
-        <button className="pill-arrow-btn">
+        {/* <button className="pill-arrow-btn">
           <span>&rsaquo;</span>
-        </button>
+        </button> */}
       </div>
 
       {/* Cards Grid */}
@@ -423,11 +550,11 @@ export default function PosTablesPage() {
               let durationType: '4h' | 'all_day' | null = null;
 
               if (activeSession) {
-                const diffMs = new Date(activeSession.endTime).getTime() - new Date(activeSession.startTime).getTime();
-                const is4h = Math.abs(diffMs - 4 * 60 * 60 * 1000) < 60000;
+                const diffMs = parseServerDate(activeSession.endTime).getTime() - parseServerDate(activeSession.startTime).getTime();
+                const is4h = [4, 8, 12, 16, 20, 24].some(h => Math.abs(diffMs - h * 60 * 60 * 1000) < 60000);
                 durationType = is4h ? '4h' : 'all_day';
 
-                const remainingTimeMs = new Date(activeSession.endTime).getTime() - currentTime.getTime();
+                const remainingTimeMs = parseServerDate(activeSession.endTime).getTime() - currentTime.getTime();
                 const isOverdue = remainingTimeMs < 0;
                 const isNearOverdue = !isOverdue && remainingTimeMs <= 15 * 60 * 1000;
 
@@ -465,16 +592,21 @@ export default function PosTablesPage() {
                   }
                 }
 
-                const startTimeStr = new Date(activeSession.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                const startTimeStr = parseServerDate(activeSession.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
                 
-                // Get item count from metadata or fallback
+                // Get item count from metadata or decoded orderId
                 let itemCount = ordersMetadata[activeSession.orderId]?.itemCount;
                 if (itemCount === undefined) {
-                  // Fallbacks for mock/seeded sessions based on index / card number
+                  const decoded = decodeOrderIdToItems(activeSession.orderId, productList);
+                  if (decoded.length > 0) {
+                    itemCount = decoded.reduce((sum, it) => sum + it.quantity, 0);
+                  }
+                }
+                if (itemCount === undefined) {
                   if (card.cardNumber === '04') itemCount = 1;
                   else if (card.cardNumber === '08') itemCount = 2;
                   else if (card.cardNumber === '03') itemCount = 1;
-                  else itemCount = 1; // general fallback
+                  else itemCount = 1;
                 }
                 subText = `Vào lúc ${startTimeStr} | ${itemCount} món`;
               } else if (card.status === 'khóa') {
@@ -483,7 +615,6 @@ export default function PosTablesPage() {
                 timerStr = 'ĐÃ KHÓA';
               }
 
-              // Use unique key considering duplicate cardNumbers in mock data
               const uniqueKey = `${card.id}-${card.cardNumber}-${idx}`;
 
               return (
@@ -515,16 +646,18 @@ export default function PosTablesPage() {
                     <div className="table-card-actions">
                       {activeSession ? (
                         <>
-                          <button 
-                            className="card-plus-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate('/pos/sales');
-                            }}
-                            title="Thêm món"
-                          >
-                            <Plus size={16} />
-                          </button>
+                          {durationType === '4h' && (
+                            <button 
+                              className="card-plus-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate('/pos/sales', { state: { lockedCardNumber: card.cardNumber } });
+                              }}
+                              title="Thêm món"
+                            >
+                              <Plus size={16} />
+                            </button>
+                          )}
                           <button 
                             className="card-checkout-btn"
                             onClick={(e) => {
@@ -532,7 +665,7 @@ export default function PosTablesPage() {
                               handleRelease(card.cardNumber);
                             }}
                           >
-                            CHECK OUT
+                            TRẢ THẺ
                           </button>
                         </>
                       ) : statusColor === 'locked' ? (
@@ -571,44 +704,66 @@ export default function PosTablesPage() {
         <div className="tables-modal-overlay" onClick={() => setSelectedSessionForDetail(null)}>
           <div className="tables-detail-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="tables-sheet-header">
-              <h2 className="tables-sheet-title">Chi Tiết Bàn #{selectedSessionForDetail.card.cardNumber}</h2>
+              <h2 className="tables-sheet-title" style={{ color: '#349409', fontSize: '24px' }}>#{selectedSessionForDetail.card.cardNumber}</h2>
               <button className="tables-sheet-close" onClick={() => setSelectedSessionForDetail(null)}>
                 <X size={20} />
               </button>
             </div>
             <div className="tables-sheet-body">
               <div className="tables-detail-info-grid">
+                {/* 
                 <div className="tables-info-item">
-                  <span className="tables-info-label">Mã đơn hàng:</span>
-                  <span className="tables-info-value font-mono">{selectedSessionForDetail.orderId}</span>
+                  <span className="tables-info-label">Mã đơn:</span>
+                  <span className="tables-info-value font-mono" style={{ fontSize: '20px', fontWeight: 800, color: '#349409', letterSpacing: '2px' }}>
+                    {ordersMetadata[selectedSessionForDetail.orderId]?.displayId
+                      ?? selectedSessionForDetail.orderId.split('-').pop()
+                      ?? selectedSessionForDetail.orderId}
+                  </span>
+                </div>
+                */}
+                <div className="tables-info-item">
+                  <span className="tables-info-label">Ngày:</span>
+                  <span className="tables-info-value">
+                    {parseServerDate(selectedSessionForDetail.startTime).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  </span>
                 </div>
                 <div className="tables-info-item">
                   <span className="tables-info-label">Giờ vào:</span>
                   <span className="tables-info-value">
-                    {new Date(selectedSessionForDetail.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                    {parseServerDate(selectedSessionForDetail.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-                <div className="tables-info-item">
-                  <span className="tables-info-label">Dự kiến ra:</span>
-                  <span className="tables-info-value">
-                    {new Date(selectedSessionForDetail.endTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-                <div className="tables-info-item">
-                  <span className="tables-info-label">Thời gian còn lại:</span>
-                  <span className="tables-info-value font-bold">
-                    {(() => {
-                      const remainingTimeMs = new Date(selectedSessionForDetail.endTime).getTime() - currentTime.getTime();
-                      const isOverdue = remainingTimeMs < 0;
-                      const elapsedMs = Math.abs(remainingTimeMs);
-                      const hours = Math.floor(elapsedMs / (3600 * 1000));
-                      const mins = Math.floor((elapsedMs % (3600 * 1000)) / (60 * 1000));
-                      const secs = Math.floor((elapsedMs % (60 * 1000)) / 1000);
-                      const pad = (n: number) => n.toString().padStart(2, '0');
-                      return `${isOverdue ? '-' : ''}${pad(hours)}:${pad(mins)}:${pad(secs)}`;
-                    })()}
-                  </span>
-                </div>
+                {(() => {
+                  const diffMs = parseServerDate(selectedSessionForDetail.endTime).getTime() - parseServerDate(selectedSessionForDetail.startTime).getTime();
+                  const is4h = [4, 8, 12, 16, 20, 24].some(h => Math.abs(diffMs - h * 60 * 60 * 1000) < 60000);
+                  if (!is4h) return null;
+                  
+                  return (
+                    <>
+                      <div className="tables-info-item">
+                        <span className="tables-info-label">Dự kiến ra:</span>
+                        <span className="tables-info-value">
+                          {parseServerDate(selectedSessionForDetail.endTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div className="tables-info-item">
+                        <span className="tables-info-label">Thời gian còn lại:</span>
+                        <span className="tables-info-value" style={{ color: '#C42326', fontWeight: 800, fontSize: '16px' }}>
+                          {(() => {
+                            const remainingTimeMs = parseServerDate(selectedSessionForDetail.endTime).getTime() - currentTime.getTime();
+                            const isOverdue = remainingTimeMs < 0;
+                            const elapsedMs = Math.abs(remainingTimeMs);
+                            const hours = Math.floor(elapsedMs / (3600 * 1000));
+                            const mins = Math.floor((elapsedMs % (3600 * 1000)) / (60 * 1000));
+                            const secs = Math.floor((elapsedMs % (60 * 1000)) / 1000);
+                            const pad = (n: number) => n.toString().padStart(2, '0');
+                            return `${isOverdue ? '-' : ''}${pad(hours)}:${pad(mins)}:${pad(secs)}`;
+                          })()}
+                        </span>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
               <div className="tables-products-section">
@@ -617,38 +772,48 @@ export default function PosTablesPage() {
                   <table className="tables-products-table">
                     <thead>
                       <tr>
-                        <th>Tên sản phẩm</th>
-                        <th>Loại phục vụ</th>
-                        <th style={{ textAlign: 'center' }}>SL</th>
-                        <th style={{ textAlign: 'right' }}>Đơn giá</th>
-                        <th style={{ textAlign: 'right' }}>Tổng</th>
+                        {/* <th style={{ width: '30px', textAlign: 'center' }}>STT</th> */}
+                        <th>SẢN PHẨM</th>
+                        <th style={{ width: '65px', textAlign: 'right' }}>GIÁ</th>
+                        <th style={{ width: '30px', textAlign: 'center' }}>SL</th>
+                        <th style={{ width: '70px', textAlign: 'right' }}>TỔNG</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(() => {
-                        const metadata = ordersMetadata[selectedSessionForDetail.orderId];
-                        const items = metadata?.items || [];
+                        // Decode directly from orderId first
+                        let items = decodeOrderIdToItems(selectedSessionForDetail.orderId, productList);
+                        
+                        // Fallback to local storage if orderId decoding was empty
+                        if (items.length === 0) {
+                          const metadata = ordersMetadata[selectedSessionForDetail.orderId];
+                          items = metadata?.items || [];
+                        }
+                        
                         if (items.length === 0) {
                           return (
                             <tr>
-                              <td colSpan={5} className="tables-no-products">
+                              <td colSpan={5} className="tables-no-products" style={{ backgroundColor: 'transparent' }}>
                                 Chưa có thông tin chi tiết món cho đơn hàng này.
                               </td>
                             </tr>
                           );
                         }
                         return items.map((item, index) => {
-                          const is4h = item.serveType === 'dine_in' && item.duration === '4h';
+                          const serveText = item.serveType === 'takeaway' ? 'Mang đi' : `Tại chỗ ${item.duration === '4h' ? '4 giờ' : 'cả ngày'}`;
+                          const unitPrice = item.serveType === 'takeaway' ? 25000 : (item.duration === '4h' ? 35000 : 45000);
+                          
                           return (
-                            <tr key={index} className={is4h ? 'row-highlight-4h' : ''}>
-                              <td className="font-semibold">{item.name}</td>
+                            <tr key={index}>
+                              {/* <td style={{ textAlign: 'center', fontSize: '14px' }}>{String(index + 1).padStart(2, '0')}</td> */}
                               <td>
-                                {item.serveType === 'takeaway' ? 'Mang đi' : `Tại chỗ (${item.duration === '4h' ? '4H' : 'Cả ngày'})`}
+                                <div style={{ fontWeight: 600, fontSize: '15px', color: '#111' }}>{item.name}</div>
+                                <div style={{ fontSize: '12px', color: '#333', marginTop: '4px' }}>{serveText}</div>
                               </td>
-                              <td style={{ textAlign: 'center' }}>{item.quantity}</td>
-                              <td style={{ textAlign: 'right' }}>{item.price.toLocaleString('vi-VN')}đ</td>
-                              <td style={{ textAlign: 'right' }} className="font-bold">
-                                {(item.price * item.quantity).toLocaleString('vi-VN')}đ
+                              <td style={{ textAlign: 'right', fontSize: '14px' }}>{unitPrice.toLocaleString('vi-VN')}đ</td>
+                              <td style={{ textAlign: 'center', fontSize: '14px' }}>{String(item.quantity).padStart(2, '0')}</td>
+                              <td style={{ textAlign: 'right', fontSize: '14px' }} className="font-bold">
+                                {(unitPrice * item.quantity).toLocaleString('vi-VN')}đ
                               </td>
                             </tr>
                           );
@@ -664,28 +829,100 @@ export default function PosTablesPage() {
                 <span>Tổng cộng đơn:</span>
                 <span className="tables-total-price">
                   {(() => {
-                    const metadata = ordersMetadata[selectedSessionForDetail.orderId];
-                    const items = metadata?.items || [];
-                    const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                    let items = decodeOrderIdToItems(selectedSessionForDetail.orderId, productList);
+                    if (items.length === 0) {
+                      const metadata = ordersMetadata[selectedSessionForDetail.orderId];
+                      items = metadata?.items || [];
+                    }
+                    const total = items.reduce((sum, item) => {
+                      const unitPrice = item.serveType === 'takeaway' ? 25000 : (item.duration === '4h' ? 35000 : 45000);
+                      return sum + (unitPrice * item.quantity);
+                    }, 0);
                     return total > 0 ? `${total.toLocaleString('vi-VN')}đ` : 'Chưa tính';
                   })()}
                 </span>
               </div>
-              <div className="tables-sheet-actions">
+              <div className="tables-sheet-actions" style={{ display: 'flex', gap: '10px' }}>
+                {(() => {
+                  const diffMs = parseServerDate(selectedSessionForDetail.endTime).getTime() - parseServerDate(selectedSessionForDetail.startTime).getTime();
+                  const is4h = [4, 8, 12, 16, 20, 24].some(h => Math.abs(diffMs - h * 60 * 60 * 1000) < 60000);
+                  if (is4h) {
+                    return (
+                      <button 
+                        className="tables-btn-checkout"
+                        onClick={() => navigate('/pos/sales', { state: { lockedCardNumber: selectedSessionForDetail.card.cardNumber } })}
+                        style={{ flex: 1, backgroundColor: '#eef8e6', color: '#349409', border: '1px solid #349409' }}
+                      >
+                        + THÊM MÓN
+                      </button>
+                    );
+                  }
+                  return null;
+                })()}
                 <button 
                   className="tables-btn-checkout"
-                  onClick={() => {
-                    handleRelease(selectedSessionForDetail.card.cardNumber);
-                    setSelectedSessionForDetail(null);
-                  }}
+                  style={{ flex: 1 }}
+                  onClick={() => handleRelease(selectedSessionForDetail.card.cardNumber)}
                 >
-                  CHECK OUT (TRẢ THẺ)
+                  TRẢ THẺ
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Confirm Release Popup */}
+      {releaseConfirmCard && (
+        <div className="tables-modal-overlay" onClick={() => setReleaseConfirmCard(null)}>
+          <div className="tables-confirm-box" onClick={e => e.stopPropagation()}>
+            <h3 className="tables-confirm-title">Xác nhận trả thẻ</h3>
+            <p className="tables-confirm-message">
+              Bạn có chắc chắn muốn trả thẻ số <strong style={{ color: '#349409' }}>#{releaseConfirmCard}</strong> không?
+            </p>
+            {releaseError && (
+              <p style={{ color: '#d32f2f', fontSize: '13px', textAlign: 'center', margin: '0 0 12px 0' }}>{releaseError}</p>
+            )}
+            <div className="tables-confirm-actions">
+              <button
+                className="tables-confirm-cancel"
+                onClick={() => setReleaseConfirmCard(null)}
+                disabled={releaseLoading}
+              >
+                HỦY
+              </button>
+              <button
+                className="tables-confirm-ok"
+                onClick={handleReleaseConfirmed}
+                disabled={releaseLoading}
+              >
+                {releaseLoading ? 'Đang xử lý...' : 'XÁC NHẬN'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Release Popup */}
+      {releaseSuccessCard && (
+        <div className="tables-modal-overlay" onClick={() => setReleaseSuccessCard(null)}>
+          <div className="tables-confirm-box" onClick={e => e.stopPropagation()}>
+            <div className="tables-success-icon">✓</div>
+            <h3 className="tables-confirm-title" style={{ color: '#349409' }}>Trả thẻ thành công!</h3>
+            <p className="tables-confirm-message">
+              Thẻ số <strong style={{ color: '#349409' }}>#{releaseSuccessCard}</strong> đã được hoàn trả thành công.
+            </p>
+            <button
+              className="tables-confirm-ok"
+              style={{ width: '100%' }}
+              onClick={() => setReleaseSuccessCard(null)}
+            >
+              ĐÓNG
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

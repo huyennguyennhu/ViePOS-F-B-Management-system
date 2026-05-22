@@ -55,9 +55,14 @@ export const cardAPI = {
   getCards: () => api.get('/api/cards'),
   getFreeCards: () => api.get('/api/cards/free'),
   startSession: (data: { cardNumber: string; orderId: string; duration: string }) => api.post('/api/cards/session', data),
+  extendSession: (cardNumber: string, newEndTime: string) => api.put(`/api/cards/session/${cardNumber}/extend`, { newEndTime }),
   releaseCard: (cardNumber: string) => api.post(`/api/cards/release/${cardNumber}`),
-  getSessions: () => api.get('/api/cards/sessions'),
+  getSessions: () => api.get('/api/cards/sessions?activeOnly=true'),
   updateCardStatus: (cardNumber: string, status: string) => api.post(`/api/cards/${cardNumber}/status`, { status }),
+};
+
+export const orderAPI = {
+  getNextId: () => api.get('/api/orders/next-id'),
 };
 
 export default api;

@@ -84,9 +84,7 @@ public class CardController {
         cardRepository.save(card);
 
         // Tìm phiên đang sử dụng của thẻ này để đóng
-        List<CardSession> activeSessions = cardSessionRepository.findAll().stream()
-                .filter(s -> s.getCard().getCardNumber().equals(cardNumber) && "Đang sử dụng".equalsIgnoreCase(s.getStatus()))
-                .collect(Collectors.toList());
+        List<CardSession> activeSessions = cardSessionRepository.findByCardCardNumberAndStatus(cardNumber, "Đang sử dụng");
 
         for (CardSession session : activeSessions) {
             session.setStatus("Hoàn thành");
@@ -99,7 +97,10 @@ public class CardController {
 
     // Lấy tất cả các phiên sử dụng thẻ
     @GetMapping("/sessions")
-    public ResponseEntity<List<CardSession>> getAllSessions() {
+    public ResponseEntity<List<CardSession>> getAllSessions(@RequestParam(required = false) Boolean activeOnly) {
+        if (Boolean.TRUE.equals(activeOnly)) {
+            return ResponseEntity.ok(cardSessionRepository.findByStatusNot("Hoàn thành"));
+        }
         return ResponseEntity.ok(cardSessionRepository.findAll());
     }
 
@@ -115,5 +116,29 @@ public class CardController {
         card.setStatus(newStatus);
         cardRepository.save(card);
         return ResponseEntity.ok(card);
+    }
+    
+    // Gia hạn thời gian phiên
+    @PutMapping("/session/{cardNumber}/extend")
+    public ResponseEntity<?> extendSession(@PathVariable String cardNumber, @RequestBody Map<String, String> payload) {
+        String newEndTimeStr = payload.get("newEndTime");
+        if (newEndTimeStr == null) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Thiếu newEndTime"));
+        }
+
+        List<CardSession> activeSessions = cardSessionRepository.findByCardCardNumberAndStatus(cardNumber, "Đang sử dụng");
+        if (activeSessions.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Không tìm thấy phiên đang hoạt động cho thẻ " + cardNumber));
+        }
+
+        CardSession session = activeSessions.get(0);
+        try {
+            LocalDateTime newEndTime = LocalDateTime.parse(newEndTimeStr);
+            session.setEndTime(newEndTime);
+            cardSessionRepository.save(session);
+            return ResponseEntity.ok(session);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Định dạng ngày giờ không hợp lệ"));
+        }
     }
 }
