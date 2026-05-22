@@ -13,6 +13,13 @@ export default function StaffLoginPage() {
   const [showPin, setShowPin] = useState(false);
   const [emailError, setEmailError] = useState('');
 
+  // Forgot PIN state
+  const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotPin, setForgotPin] = useState('');
+  const [forgotSubmitting, setForgotSubmitting] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState('');
+
   const handleTogglePin = () => {
     setShowPin(true);
     setTimeout(() => setShowPin(false), 3000);
@@ -91,6 +98,15 @@ export default function StaffLoginPage() {
         if (res.data.token) {
           localStorage.setItem('token', res.data.token);
           localStorage.setItem('role', res.data.role);
+          localStorage.setItem('staffEmail', email);
+          if (res.data.name) localStorage.setItem('staffName', res.data.name);
+          if (res.data.id) localStorage.setItem('staffId', res.data.id);
+          if (res.data.phone) localStorage.setItem('staffPhone', res.data.phone);
+          
+          const now = new Date();
+          const formattedTime = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+          localStorage.setItem('lastLoginTime', formattedTime);
+          
           navigate('/pos/sales');
         }
       } catch (err: any) {
@@ -100,7 +116,35 @@ export default function StaffLoginPage() {
       }
     }
   };
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotMessage('');
+    
+    if (!validateEmail(forgotEmail)) {
+      setForgotMessage('Email không hợp lệ.');
+      return;
+    }
+    if (forgotPin.length !== 6 || !/^\d+$/.test(forgotPin)) {
+      setForgotMessage('Mã PIN mới phải gồm đúng 6 chữ số.');
+      return;
+    }
 
+    try {
+      setForgotSubmitting(true);
+      const res = await authAPI.forgotPin({ email: forgotEmail, newPin: forgotPin });
+      setForgotMessage(res.data.message || 'Gửi yêu cầu thành công!');
+      setTimeout(() => {
+        setIsForgotModalOpen(false);
+        setForgotMessage('');
+        setForgotEmail('');
+        setForgotPin('');
+      }, 3000);
+    } catch (err: any) {
+      setForgotMessage(err.response?.data?.message || 'Có lỗi xảy ra.');
+    } finally {
+      setForgotSubmitting(false);
+    }
+  };
   return (
     <div className="staff-login-container">
       <div className="staff-login-card">
@@ -164,7 +208,7 @@ export default function StaffLoginPage() {
               <input type="checkbox" />
               <span>Đăng nhập nhanh</span>
             </label>
-            <a href="#" className="staff-forgot-pin">Quên Mã PIN?</a>
+            <span onClick={() => setIsForgotModalOpen(true)} className="staff-forgot-pin" style={{ cursor: 'pointer' }}>Quên Mã PIN?</span>
           </div>
 
           <button type="submit" className="staff-submit-btn" disabled={isSubmitting}>
@@ -194,6 +238,58 @@ export default function StaffLoginPage() {
               maxWidth: '90vw'
             }}>
               {error}
+            </div>
+          )}
+
+          {/* Forgot PIN Modal */}
+          {isForgotModalOpen && (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 999
+            }}>
+              <div style={{
+                backgroundColor: 'white', padding: '24px', borderRadius: '12px', width: '90%', maxWidth: '400px'
+              }}>
+                <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#111' }}>Yêu Cầu Cấp Lại Mã PIN</h3>
+                
+                <div className="staff-form-group">
+                  <label>Email của bạn</label>
+                  <input 
+                    type="email" 
+                    className="staff-pin-input"
+                    style={{ width: '100%', padding: '12px', boxSizing: 'border-box', border: '1px solid #ccc', borderRadius: '8px' }}
+                    placeholder="abc@gmail.com"
+                    value={forgotEmail}
+                    onChange={e => setForgotEmail(e.target.value)}
+                  />
+                </div>
+
+                <div className="staff-form-group">
+                  <label>Mã PIN Mới (6 số)</label>
+                  <input 
+                    type="password" 
+                    maxLength={6}
+                    className="staff-pin-input"
+                    style={{ width: '100%', padding: '12px', boxSizing: 'border-box', border: '1px solid #ccc', borderRadius: '8px', letterSpacing: '8px', fontFamily: 'monospace' }}
+                    placeholder="••••••"
+                    value={forgotPin}
+                    onChange={e => setForgotPin(e.target.value)}
+                  />
+                </div>
+
+                {forgotMessage && (
+                  <div style={{ marginBottom: '16px', padding: '10px', backgroundColor: forgotMessage.includes('thành công') ? '#d4edda' : '#f8d7da', color: forgotMessage.includes('thành công') ? '#155724' : '#721c24', borderRadius: '6px', fontSize: '13px' }}>
+                    {forgotMessage}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button type="button" onClick={() => setIsForgotModalOpen(false)} style={{ flex: 1, padding: '12px', backgroundColor: '#f1f1f1', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>Huỷ</button>
+                  <button type="button" onClick={handleForgotSubmit} disabled={forgotSubmitting} style={{ flex: 1, padding: '12px', backgroundColor: '#256E05', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>
+                    {forgotSubmitting ? 'Đang gửi...' : 'Gửi Yêu Cầu'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

@@ -4,6 +4,10 @@ import com.viepos.backend.models.Role;
 import com.viepos.backend.models.User;
 import com.viepos.backend.models.UserStatus;
 import com.viepos.backend.repositories.UserRepository;
+import com.viepos.backend.repositories.PinChangeRequestRepository;
+import com.viepos.backend.repositories.PinResetRequestRepository;
+import com.viepos.backend.models.PinChangeRequest;
+import com.viepos.backend.models.PinResetRequest;
 import com.viepos.backend.security.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +29,12 @@ public class StaffController {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private PinChangeRequestRepository pinChangeRequestRepository;
+
+    @Autowired
+    private PinResetRequestRepository pinResetRequestRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -158,6 +168,200 @@ public class StaffController {
         response.put("ok", true);
         response.put("token", jwt);
         response.put("role", user.getRole().name());
+        response.put("name", user.getName());
+        response.put("id", user.getId());
+        response.put("phone", user.getPhone() != null ? user.getPhone() : "");
+        
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/verify-pin")
+    public ResponseEntity<?> verifyPin(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+        String pin = request.get("pin");
+
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(email, pin)
+            );
+            return ResponseEntity.ok(Map.of("ok", true, "message", "Mã PIN chính xác."));
+        } catch (Exception e) {
+            return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Mã PIN cũ không chính xác."));
+        }
+    }
+
+    @PostMapping("/pin-change-request")
+    public ResponseEntity<?> requestPinChange(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+        String oldPin = request.get("oldPin");
+        String newPin = request.get("newPin");
+
+        if (oldPin.equals(newPin)) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false, "message", "Mã PIN mới không được trùng với mã PIN cũ."));
+        }
+
+        Optional<User> userOpt = userRepository.findByEmail(email);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Tài khoản không tồn tại."));
+        }
+
+        User user = userOpt.get();
+
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(email, oldPin)
+            );
+        } catch (Exception e) {
+            return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Mã PIN cũ không chính xác."));
+        }
+
+        PinChangeRequest pinRequest = new PinChangeRequest();
+        pinRequest.setUser(user);
+        pinRequest.setNewPin(passwordEncoder.encode(newPin));
+        pinChangeRequestRepository.save(pinRequest);
+
+        return ResponseEntity.ok(Map.of("ok", true, "message", "Yêu cầu đổi mã PIN đã được gửi thành công và đang chờ duyệt."));
+    }
+
+    @PostMapping("/forgot-pin")
+    public ResponseEntity<?> requestForgotPin(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+        String newPin = request.get("newPin");
+
+        Optional<User> userOpt = userRepository.findByEmail(email);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Email không tồn tại trong hệ thống."));
+        }
+
+        User user = userOpt.get();
+
+        PinResetRequest resetReq = new PinResetRequest();
+        resetReq.setUser(user);
+        resetReq.setNewPin(passwordEncoder.encode(newPin));
+        pinResetRequestRepository.save(resetReq);
+
+        return ResponseEntity.ok(Map.of("ok", true, "message", "Yêu cầu cấp lại mã PIN đã được gửi thành công. Vui lòng chờ Quản lý duyệt."));
+    }
+
+    // ==============================================================
+    // ADMIN ENDPOINTS
+    // ==============================================================
+
+    @GetMapping("/all")
+    public ResponseEntity<List<User>> getAllStaff() {
+        List<User> staff = userRepository.findByRole(Role.STAFF);
+        for(User u : staff) {
+            u.setPassword(null); // hide password hash
+        }
+        return ResponseEntity.ok(staff);
+    }
+
+    @GetMapping("/history/accounts")
+    public ResponseEntity<List<User>> getAccountHistory() {
+        List<User> history = userRepository.findByRoleAndStatusNot(Role.STAFF, UserStatus.PENDING);
+        for(User u : history) {
+            u.setPassword(null);
+        }
+        return ResponseEntity.ok(history);
+    }
+
+    @GetMapping("/pin-change-requests/pending")
+    public ResponseEntity<List<PinChangeRequest>> getPendingPinRequests() {
+        List<PinChangeRequest> pending = pinChangeRequestRepository.findByStatusOrderByCreatedAtDesc(com.viepos.backend.models.PinChangeRequestStatus.PENDING);
+        for(PinChangeRequest req : pending) {
+            req.getUser().setPassword(null);
+        }
+        return ResponseEntity.ok(pending);
+    }
+
+    @GetMapping("/pin-change-requests/history")
+    public ResponseEntity<List<PinChangeRequest>> getPinChangeHistory() {
+        List<PinChangeRequest> history = pinChangeRequestRepository.findByStatusInOrderByCreatedAtDesc(
+            List.of(com.viepos.backend.models.PinChangeRequestStatus.APPROVED, com.viepos.backend.models.PinChangeRequestStatus.REJECTED)
+        );
+        for(PinChangeRequest req : history) {
+            req.getUser().setPassword(null);
+        }
+        return ResponseEntity.ok(history);
+    }
+
+    @PutMapping("/pin-change-requests/{id}/approve")
+    public ResponseEntity<?> approvePinRequest(@PathVariable String id) {
+        Optional<PinChangeRequest> reqOpt = pinChangeRequestRepository.findById(id);
+        if (reqOpt.isPresent()) {
+            PinChangeRequest req = reqOpt.get();
+            req.setStatus(com.viepos.backend.models.PinChangeRequestStatus.APPROVED);
+            
+            // Update user password
+            User user = req.getUser();
+            user.setPassword(req.getNewPin());
+            userRepository.save(user);
+            pinChangeRequestRepository.save(req);
+
+            return ResponseEntity.ok(Map.of("message", "Đã duyệt yêu cầu đổi mã PIN."));
+        }
+        return ResponseEntity.notFound().build();
+    }
+
+    @PutMapping("/pin-change-requests/{id}/reject")
+    public ResponseEntity<?> rejectPinRequest(@PathVariable String id) {
+        Optional<PinChangeRequest> reqOpt = pinChangeRequestRepository.findById(id);
+        if (reqOpt.isPresent()) {
+            PinChangeRequest req = reqOpt.get();
+            req.setStatus(com.viepos.backend.models.PinChangeRequestStatus.REJECTED);
+            pinChangeRequestRepository.save(req);
+            return ResponseEntity.ok(Map.of("message", "Đã từ chối yêu cầu đổi mã PIN."));
+        }
+        return ResponseEntity.notFound().build();
+    }
+
+    @GetMapping("/pin-reset-requests/pending")
+    public ResponseEntity<List<PinResetRequest>> getPendingPinResets() {
+        List<PinResetRequest> pending = pinResetRequestRepository.findByStatusOrderByCreatedAtDesc(com.viepos.backend.models.PinChangeRequestStatus.PENDING);
+        for(PinResetRequest req : pending) {
+            req.getUser().setPassword(null);
+        }
+        return ResponseEntity.ok(pending);
+    }
+
+    @GetMapping("/pin-reset-requests/history")
+    public ResponseEntity<List<PinResetRequest>> getPinResetHistory() {
+        List<PinResetRequest> history = pinResetRequestRepository.findByStatusInOrderByCreatedAtDesc(
+            List.of(com.viepos.backend.models.PinChangeRequestStatus.APPROVED, com.viepos.backend.models.PinChangeRequestStatus.REJECTED)
+        );
+        for(PinResetRequest req : history) {
+            req.getUser().setPassword(null);
+        }
+        return ResponseEntity.ok(history);
+    }
+
+    @PutMapping("/pin-reset-requests/{id}/approve")
+    public ResponseEntity<?> approvePinReset(@PathVariable String id) {
+        Optional<PinResetRequest> reqOpt = pinResetRequestRepository.findById(id);
+        if (reqOpt.isPresent()) {
+            PinResetRequest req = reqOpt.get();
+            req.setStatus(com.viepos.backend.models.PinChangeRequestStatus.APPROVED);
+            
+            // Update user password
+            User user = req.getUser();
+            user.setPassword(req.getNewPin());
+            userRepository.save(user);
+            pinResetRequestRepository.save(req);
+
+            return ResponseEntity.ok(Map.of("message", "Đã duyệt yêu cầu cấp lại mã PIN."));
+        }
+        return ResponseEntity.notFound().build();
+    }
+
+    @PutMapping("/pin-reset-requests/{id}/reject")
+    public ResponseEntity<?> rejectPinReset(@PathVariable String id) {
+        Optional<PinResetRequest> reqOpt = pinResetRequestRepository.findById(id);
+        if (reqOpt.isPresent()) {
+            PinResetRequest req = reqOpt.get();
+            req.setStatus(com.viepos.backend.models.PinChangeRequestStatus.REJECTED);
+            pinResetRequestRepository.save(req);
+            return ResponseEntity.ok(Map.of("message", "Đã từ chối yêu cầu cấp lại mã PIN."));
+        }
+        return ResponseEntity.notFound().build();
     }
 }

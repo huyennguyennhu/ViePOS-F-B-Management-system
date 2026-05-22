@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { User, Users } from 'lucide-react';
 import './RoleSelectionPage.css';
 import heroImg from '../assets/hero.png';

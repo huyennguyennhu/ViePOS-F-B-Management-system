@@ -24,10 +24,17 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      const url = error.config?.url || '';
+      
+      // Bỏ qua logic đăng xuất tự động đối với các API kiểm tra mật khẩu/PIN
+      if (url.includes('/login') || url.includes('/verify-pin') || url.includes('/pin-change-request') || url.includes('/forgot-pin')) {
+        return Promise.reject(error);
+      }
+
       localStorage.removeItem('token');
       // Không tự động redirect nếu đang ở trang Đăng nhập
       if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
+        window.location.href = '/';
       }
     }
     return Promise.reject(error);
@@ -35,15 +42,32 @@ api.interceptors.response.use(
 );
 
 export const authAPI = {
-  login: (data: any) => api.post('/api/auth/login', data),
-  staffRegister: (data: any) => api.post('/api/staff/register', data),
+  adminLogin: (data: any) => api.post('/api/auth/admin/login', data),
+  adminRegister: (data: any) => api.post('/api/auth/admin/register', data),
   staffLogin: (data: any) => api.post('/api/staff/login', data),
+  staffRegister: (data: any) => api.post('/api/staff/register', data),
+  verifyPin: (data: any) => api.post('/api/staff/verify-pin', data),
+  requestPinChange: (data: any) => api.post('/api/staff/pin-change-request', data),
+  forgotPin: (data: any) => api.post('/api/staff/forgot-pin', data),
 };
 
 export const staffAPI = {
+  getAll: () => api.get('/api/staff/all'),
   getPending: () => api.get('/api/staff/pending'),
   approve: (id: string) => api.put(`/api/staff/${id}/approve`),
   reject: (id: string) => api.put(`/api/staff/${id}/reject`),
+  
+  getHistoryAccounts: () => api.get('/api/staff/history/accounts'),
+  
+  getPendingPinRequests: () => api.get('/api/staff/pin-change-requests/pending'),
+  getHistoryPinRequests: () => api.get('/api/staff/pin-change-requests/history'),
+  approvePinRequest: (id: string) => api.put(`/api/staff/pin-change-requests/${id}/approve`),
+  rejectPinRequest: (id: string) => api.put(`/api/staff/pin-change-requests/${id}/reject`),
+  
+  getPendingPinResets: () => api.get('/api/staff/pin-reset-requests/pending'),
+  getHistoryPinResets: () => api.get('/api/staff/pin-reset-requests/history'),
+  approvePinReset: (id: string) => api.put(`/api/staff/pin-reset-requests/${id}/approve`),
+  rejectPinReset: (id: string) => api.put(`/api/staff/pin-reset-requests/${id}/reject`),
 };
 
 export const productAPI = {

@@ -388,6 +388,7 @@ export default function PosSalesPage() {
       metadata[orderId] = {
         itemCount: totalItems,
         displayId: displayId,
+        creator: localStorage.getItem('staffEmail') || 'Unknown',
         initial4hCount: cartItems.filter(i => i.duration === '4h' && i.serveType === 'dine_in').reduce((sum, i) => sum + i.quantity, 0),
         items: cartItems.map(item => ({
           name: item.product.name,
@@ -400,6 +401,23 @@ export default function PosSalesPage() {
         }))
       };
       localStorage.setItem('pos_orders_metadata', JSON.stringify(metadata));
+
+      // Save to pos_order_history for separated order history view
+      const savedHistory = localStorage.getItem('pos_order_history');
+      const orderHistory = savedHistory ? JSON.parse(savedHistory) : [];
+      orderHistory.push({
+        id: orderId,
+        displayId: displayId,
+        parentOrderId: orderId,
+        cardNumber: selectedCardNumber,
+        items: metadata[orderId].items,
+        totalAmount: cartItems.reduce((sum, i) => sum + (i.price * i.quantity), 0),
+        paymentMethod: paymentMethod === 'cash' ? 'Tiền mặt' : 'Chuyển khoản',
+        status: duration === 'takeaway' ? 'Hoàn thành' : 'Đang dùng',
+        createdAt: new Date().toISOString(),
+        creator: localStorage.getItem('staffEmail') || 'Unknown'
+      });
+      localStorage.setItem('pos_order_history', JSON.stringify(orderHistory));
     } catch (err) {
       console.error('Lỗi khi tạo phiên thẻ:', err);
     }
@@ -498,12 +516,40 @@ export default function PosSalesPage() {
           }));
 
           if (!metadata[orderId]) {
-             metadata[orderId] = { itemCount: 0, items: [] };
+             metadata[orderId] = { itemCount: 0, items: [], creator: localStorage.getItem('staffEmail') || 'Unknown' };
           }
           metadata[orderId].items = [...originalItems, ...formattedCartItems];
           metadata[orderId].itemCount = metadata[orderId].items.reduce((sum: number, i: any) => sum + i.quantity, 0);
           
           localStorage.setItem('pos_orders_metadata', JSON.stringify(metadata));
+
+          // Save sub-order to pos_order_history
+          const savedHistory = localStorage.getItem('pos_order_history');
+          const orderHistory = savedHistory ? JSON.parse(savedHistory) : [];
+          
+          let subOrderId = `${orderId}-${Date.now().toString().slice(-4)}`;
+          let displaySubId = subOrderId.split('-').pop() || '';
+          try {
+            const subOrderRes = await orderAPI.getNextId();
+            subOrderId = subOrderRes.data.orderId;
+            displaySubId = subOrderRes.data.displayId;
+          } catch (err) {
+            console.error('Không thể lấy mã đơn phụ từ backend, dùng fallback:', err);
+          }
+          
+          orderHistory.push({
+            id: subOrderId,
+            displayId: displaySubId,
+            parentOrderId: orderId,
+            cardNumber: lockedCardNumber,
+            items: formattedCartItems,
+            totalAmount: cartItems.reduce((sum, i) => sum + (i.price * i.quantity), 0),
+            paymentMethod: paymentMethod === 'cash' ? 'Tiền mặt' : 'Chuyển khoản',
+            status: 'Đang dùng',
+            createdAt: new Date().toISOString(),
+            creator: localStorage.getItem('staffEmail') || 'Unknown'
+          });
+          localStorage.setItem('pos_order_history', JSON.stringify(orderHistory));
         }
       } catch (e) {
         console.error("Lỗi khi cập nhật thời gian / thêm món:", e);
@@ -516,13 +562,52 @@ export default function PosSalesPage() {
       setIsCartOpen(false);
       navigate('/pos/tables', { state: { openCardNumber: lockedCardNumber } });
     } else {
+      setIsSubmitting(true);
+      // Create a standalone takeaway order in history
+      const savedHistory = localStorage.getItem('pos_order_history');
+      const orderHistory = savedHistory ? JSON.parse(savedHistory) : [];
+      
+      let taOrderId = `HCM01-TA-${Date.now().toString().slice(-6)}`;
+      let displayTaId = taOrderId.split('-').pop() || '';
+      try {
+        const taOrderRes = await orderAPI.getNextId();
+        taOrderId = taOrderRes.data.orderId;
+        displayTaId = taOrderRes.data.displayId;
+      } catch (err) {
+        console.error('Không thể lấy mã đơn mang đi từ backend, dùng fallback:', err);
+      }
+      
+      orderHistory.push({
+        id: taOrderId,
+        displayId: displayTaId,
+        parentOrderId: null,
+        cardNumber: 'Mang đi',
+        items: cartItems.map(item => ({
+          name: item.product.name,
+          sku: item.product.sku,
+          serveType: item.serveType,
+          duration: item.duration,
+          quantity: item.quantity,
+          price: item.price,
+          note: item.note
+        })),
+        totalAmount: cartItems.reduce((sum, i) => sum + (i.price * i.quantity), 0),
+        paymentMethod: paymentMethod === 'cash' ? 'Tiền mặt' : 'Chuyển khoản',
+        status: 'Hoàn thành',
+        createdAt: new Date().toISOString(),
+        creator: localStorage.getItem('staffEmail') || 'Unknown'
+      });
+      localStorage.setItem('pos_order_history', JSON.stringify(orderHistory));
+
       setCartItems([]);
       setIsCardSelectionOpen(false);
       setIsCartOpen(false);
+      setIsSubmitting(false);
       setSuccessDialog({
         open: true,
         title: 'Tạo Đơn Thành Công!',
-        message: 'Đơn hàng mang đi đã được ghi nhận và thanh toán.'
+        message: 'Đơn hàng mang đi đã được ghi nhận và thanh toán.',
+        displayId: displayTaId
       });
     }
   };

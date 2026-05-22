@@ -13,6 +13,9 @@ import PosTablesPage from './pages/PosTablesPage';
 import PosSalesPage from './pages/PosSalesPage';
 import PosOrdersPage from './pages/PosOrdersPage';
 import PosAccountPage from './pages/PosAccountPage';
+import PosChangePinPage from './pages/PosChangePinPage';
+import RevenueReportPage from './pages/RevenueReportPage';
+import InventoryManagementPage from './pages/InventoryManagementPage';
 
 function App() {
   return (
@@ -35,11 +38,17 @@ function App() {
           <Route path="sales" element={<PosSalesPage />} />
           <Route path="orders" element={<PosOrdersPage />} />
           <Route path="account" element={<PosAccountPage />} />
+          <Route path="change-pin" element={<PosChangePinPage />} />
         </Route>
 
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<DashboardPage />} />
+          <Route path="reports/revenue" element={<RevenueReportPage />} />
           <Route path="staff" element={<StaffManagementPage />} />
+          <Route path="staff/list" element={<StaffManagementPage />} />
+          <Route path="staff/pending" element={<StaffManagementPage />} />
+          <Route path="staff/history" element={<StaffManagementPage />} />
+          <Route path="inventory/manage" element={<InventoryManagementPage />} />
           <Route path="*" element={<DashboardPage />} />
         </Route>
         

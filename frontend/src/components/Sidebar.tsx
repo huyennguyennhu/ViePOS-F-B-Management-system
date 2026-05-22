@@ -9,6 +9,7 @@ export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSid
   const [reportsExpanded, setReportsExpanded] = useState(true);
   const [productsExpanded, setProductsExpanded] = useState(false);
   const [inventoryExpanded, setInventoryExpanded] = useState(false);
+  const [staffExpanded, setStaffExpanded] = useState(false);
 
   const isActive = (path: string, exact = false) => {
     if (exact) return location.pathname === path;
@@ -18,8 +19,9 @@ export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSid
   const isReportsActive = isActive('/dashboard/reports') || isActive('/dashboard', true);
   const isProductsActive = isActive('/dashboard/products');
   const isInventoryActive = isActive('/dashboard/inventory');
+  const isStaffActive = isActive('/dashboard/staff');
 
-  const navigateTo = (path: string, section?: 'reports' | 'products' | 'inventory') => {
+  const navigateTo = (path: string, section?: 'reports' | 'products' | 'inventory' | 'staff') => {
     navigate(path);
     if (!isSidebarOpen && toggleSidebar) {
       // Don't auto-open sidebar when navigating from tooltip
@@ -28,10 +30,12 @@ export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSid
       if (section !== 'reports') setReportsExpanded(false);
       if (section !== 'products') setProductsExpanded(false);
       if (section !== 'inventory') setInventoryExpanded(false);
+      if (section !== 'staff') setStaffExpanded(false);
     } else {
       setReportsExpanded(false);
       setProductsExpanded(false);
       setInventoryExpanded(false);
+      setStaffExpanded(false);
     }
   };
 
@@ -132,9 +136,28 @@ export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSid
         </div>
 
         <div className="nav-group">
-          <div className={`nav-item ${isActive('/dashboard/staff') ? 'active' : ''}`} onClick={() => navigateTo('/dashboard/staff')}>
+          <div className={`nav-item ${isStaffActive ? 'active' : ''}`} onClick={(e) => toggleMenu(e, setStaffExpanded, staffExpanded)}>
             <div className="nav-item-left"><Users size={18} /> <span className="nav-label">Nhân viên</span></div>
+            {(staffExpanded && isSidebarOpen) ? <ChevronDown size={16} className="nav-chevron" /> : <ChevronRight size={16} className="nav-chevron" />}
           </div>
+          
+          {(staffExpanded || !isSidebarOpen) && (
+            <div className="nav-sub-menu">
+              <div className="nav-sub-title">Nhân viên</div>
+              <div className={`sub-nav-item ${(isActive('/dashboard/staff/list') || isActive('/dashboard/staff', true)) ? 'active' : ''}`} onClick={() => navigateTo('/dashboard/staff/list', 'staff')}>
+                {(isActive('/dashboard/staff/list') || isActive('/dashboard/staff', true)) && <span className="sub-nav-indicator">●</span>}
+                <span>Danh sách nhân viên</span>
+              </div>
+              <div className={`sub-nav-item ${isActive('/dashboard/staff/pending') ? 'active' : ''}`} onClick={() => navigateTo('/dashboard/staff/pending', 'staff')}>
+                {isActive('/dashboard/staff/pending') && <span className="sub-nav-indicator">●</span>}
+                <span>Yêu cầu phê duyệt</span>
+              </div>
+              <div className={`sub-nav-item ${isActive('/dashboard/staff/history') ? 'active' : ''}`} onClick={() => navigateTo('/dashboard/staff/history', 'staff')}>
+                {isActive('/dashboard/staff/history') && <span className="sub-nav-indicator">●</span>}
+                <span>Lịch sử phê duyệt</span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="nav-group">

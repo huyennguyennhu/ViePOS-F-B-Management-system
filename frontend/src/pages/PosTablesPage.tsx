@@ -354,6 +354,18 @@ export default function PosTablesPage() {
           ? { ...s, actualEndTime: new Date().toISOString(), status: 'Hoàn thành' }
           : s
       ));
+      
+      // Sync pos_order_history status to Hoàn thành
+      const savedHistory = localStorage.getItem('pos_order_history');
+      if (savedHistory) {
+        const orderHistory = JSON.parse(savedHistory);
+        const updatedHistory = orderHistory.map((order: any) => 
+          order.cardNumber === releaseConfirmCard && order.status === 'Đang dùng'
+            ? { ...order, status: 'Hoàn thành' }
+            : order
+        );
+        localStorage.setItem('pos_order_history', JSON.stringify(updatedHistory));
+      }
       setReleaseConfirmCard(null);
       setReleaseSuccessCard(releaseConfirmCard);
     } catch (err) {
@@ -782,7 +794,7 @@ export default function PosTablesPage() {
                     <tbody>
                       {(() => {
                         // Decode directly from orderId first
-                        let items = decodeOrderIdToItems(selectedSessionForDetail.orderId, productList);
+                        let items: any[] = decodeOrderIdToItems(selectedSessionForDetail.orderId, productList);
                         
                         // Fallback to local storage if orderId decoding was empty
                         if (items.length === 0) {
@@ -807,12 +819,12 @@ export default function PosTablesPage() {
                             <tr key={index}>
                               {/* <td style={{ textAlign: 'center', fontSize: '14px' }}>{String(index + 1).padStart(2, '0')}</td> */}
                               <td>
-                                <div style={{ fontWeight: 600, fontSize: '15px', color: '#111' }}>{item.name}</div>
+                                <div style={{ fontWeight: 600, fontSize: '14px', color: '#111' }}>{item.name}</div>
                                 <div style={{ fontSize: '12px', color: '#333', marginTop: '4px' }}>{serveText}</div>
                               </td>
-                              <td style={{ textAlign: 'right', fontSize: '14px' }}>{unitPrice.toLocaleString('vi-VN')}đ</td>
-                              <td style={{ textAlign: 'center', fontSize: '14px' }}>{String(item.quantity).padStart(2, '0')}</td>
-                              <td style={{ textAlign: 'right', fontSize: '14px' }} className="font-bold">
+                              <td style={{ textAlign: 'right', fontSize: '13px' }}>{unitPrice.toLocaleString('vi-VN')}đ</td>
+                              <td style={{ textAlign: 'center', fontSize: '13px' }}>{String(item.quantity).padStart(2, '0')}</td>
+                              <td style={{ textAlign: 'right', fontSize: '13px' }} className="font-bold">
                                 {(unitPrice * item.quantity).toLocaleString('vi-VN')}đ
                               </td>
                             </tr>
@@ -829,7 +841,7 @@ export default function PosTablesPage() {
                 <span>Tổng cộng đơn:</span>
                 <span className="tables-total-price">
                   {(() => {
-                    let items = decodeOrderIdToItems(selectedSessionForDetail.orderId, productList);
+                    let items: any[] = decodeOrderIdToItems(selectedSessionForDetail.orderId, productList);
                     if (items.length === 0) {
                       const metadata = ordersMetadata[selectedSessionForDetail.orderId];
                       items = metadata?.items || [];
