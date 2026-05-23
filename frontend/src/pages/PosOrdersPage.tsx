@@ -164,7 +164,7 @@ export default function PosOrdersPage() {
 
       {/* Order Details Popup */}
       {selectedOrder && (
-        <div className="pos-modal-overlay" onClick={() => setSelectedOrder(null)}>
+        <div className="pos-modal-overlay">
           <div className="pos-modal-content tables-sheet-content" style={{ maxWidth: '600px', width: '90%' }} onClick={e => e.stopPropagation()}>
             <div className="tables-sheet-header">
               <h2 className="tables-sheet-title">
@@ -260,7 +260,7 @@ export default function PosOrdersPage() {
 
       {/* Card Detail Popup (Same as PosTablesPage's popup) */}
       {selectedCardForPopup && (
-        <div className="tables-modal-overlay" onClick={() => setSelectedCardForPopup(null)}>
+        <div className="tables-modal-overlay">
           <div className="tables-detail-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="tables-sheet-header">
               <h2 className="tables-sheet-title" style={{ color: '#349409', fontSize: '24px' }}>#{selectedCardForPopup.card?.cardNumber}</h2>

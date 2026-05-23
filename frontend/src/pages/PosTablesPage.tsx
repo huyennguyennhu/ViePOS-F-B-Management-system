@@ -217,9 +217,9 @@ export default function PosTablesPage() {
     }
   }, [cards, sessions]);
 
-  const fetchData = async () => {
-    setLoading(true);
-    setErrorMessage(null);
+  const fetchData = async (silent = false) => {
+    if (!silent) setLoading(true);
+    if (!silent) setErrorMessage(null);
     try {
       const [cardsRes, sessionsRes, productsRes] = await Promise.all([
         cardAPI.getCards(),
@@ -246,9 +246,11 @@ export default function PosTablesPage() {
       );
       setSessions(sortedSessions);
     } catch (err) {
-      console.error('Lỗi khi tải dữ liệu thẻ/phiên:', err);
-      setErrorMessage('Không thể kết nối đến máy chủ. Đang sử dụng dữ liệu giả lập.');
-      
+      // Only show error on manual/initial load, not on silent polling
+      if (!silent) {
+        console.error('Lỗi khi tải dữ liệu thẻ/phiên:', err);
+        setErrorMessage('Không thể kết nối đến máy chủ. Đang sử dụng dữ liệu giả lập.');
+      }
       // Seed fallback data for testing
       setCards([
         { id: 1, cardNumber: '04', status: 'quá giờ' },
@@ -325,12 +327,20 @@ export default function PosTablesPage() {
         }
       ]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchData();
+  }, []);
+
+  // Auto-polling every 10s to sync state changes made by Admin (e.g. Trả thẻ)
+  useEffect(() => {
+    const pollInterval = setInterval(() => {
+      fetchData(true); // silent=true: no loading screen, no error banner
+    }, 10000);
+    return () => clearInterval(pollInterval);
   }, []);
 
   const handleRelease = (cardNumber: string) => {
@@ -482,7 +492,7 @@ export default function PosTablesPage() {
       <div className="tables-header-centered">
         <div style={{ width: '36px' }}></div>
         <h1 className="tables-title-text">Bàn</h1>
-        <button className="btn-refresh-subtle" onClick={fetchData} disabled={loading}>
+        <button className="btn-refresh-subtle" onClick={() => fetchData(false)} disabled={loading}>
           <RefreshCw size={16} className={loading ? 'spinning' : ''} />
         </button>
       </div>
@@ -547,7 +557,7 @@ export default function PosTablesPage() {
         ) : sortedCards.length === 0 ? (
           <div className="no-cards-found">Không tìm thấy thẻ bàn nào phù hợp.</div>
         ) : (
-          <div className="cards-grid-mockup">
+          <div className="pos-cards-grid">
             {sortedCards.map((card, idx) => {
               const activeSession = sessions.find(
                 s => s.card.cardNumber === card.cardNumber &&
@@ -667,7 +677,7 @@ export default function PosTablesPage() {
                               }}
                               title="Thêm món"
                             >
-                              <Plus size={16} />
+                              +
                             </button>
                           )}
                           <button 

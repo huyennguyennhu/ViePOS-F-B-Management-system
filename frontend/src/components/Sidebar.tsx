@@ -6,20 +6,20 @@ import './Sidebar.css';
 export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSidebarOpen?: boolean, toggleSidebar?: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [reportsExpanded, setReportsExpanded] = useState(true);
-  const [productsExpanded, setProductsExpanded] = useState(false);
-  const [inventoryExpanded, setInventoryExpanded] = useState(false);
-  const [staffExpanded, setStaffExpanded] = useState(false);
-
   const isActive = (path: string, exact = false) => {
     if (exact) return location.pathname === path;
     return location.pathname.startsWith(path);
   };
 
-  const isReportsActive = isActive('/dashboard/reports') || isActive('/dashboard', true);
+  const isReportsActive = isActive('/dashboard/reports');
   const isProductsActive = isActive('/dashboard/products');
   const isInventoryActive = isActive('/dashboard/inventory');
   const isStaffActive = isActive('/dashboard/staff');
+
+  const [reportsExpanded, setReportsExpanded] = useState(isReportsActive);
+  const [productsExpanded, setProductsExpanded] = useState(isProductsActive);
+  const [inventoryExpanded, setInventoryExpanded] = useState(isInventoryActive);
+  const [staffExpanded, setStaffExpanded] = useState(isStaffActive);
 
   const navigateTo = (path: string, section?: 'reports' | 'products' | 'inventory' | 'staff') => {
     navigate(path);
@@ -57,7 +57,7 @@ export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSid
       <div className="sidebar-nav">
         
         <div className="nav-group">
-          <div className={`nav-item ${isActive('/dashboard/overview') ? 'active' : ''}`} onClick={() => navigateTo('/dashboard/overview')}>
+          <div className={`nav-item ${isActive('/dashboard', true) || isActive('/dashboard/overview') ? 'active' : ''}`} onClick={() => navigateTo('/dashboard')}>
             <div className="nav-item-left"><Home size={18} /> <span className="nav-label">Tổng quan</span></div>
           </div>
         </div>
@@ -75,8 +75,8 @@ export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSid
                 {isActive('/dashboard/reports/revenue') && <span className="sub-nav-indicator">●</span>}
                 <span>Doanh thu</span>
               </div>
-              <div className={`sub-nav-item ${isActive('/dashboard', true) || isActive('/dashboard/reports/products') ? 'active' : ''}`} onClick={() => navigateTo('/dashboard', 'reports')}>
-                {(isActive('/dashboard', true) || isActive('/dashboard/reports/products')) && <span className="sub-nav-indicator">●</span>}
+              <div className={`sub-nav-item ${isActive('/dashboard/reports/products') ? 'active' : ''}`} onClick={() => navigateTo('/dashboard/reports/products', 'reports')}>
+                {isActive('/dashboard/reports/products') && <span className="sub-nav-indicator">●</span>}
                 <span>Sản phẩm</span>
               </div>
               <div className={`sub-nav-item ${isActive('/dashboard/reports/staff') ? 'active' : ''}`} onClick={() => navigateTo('/dashboard/reports/staff', 'reports')}>

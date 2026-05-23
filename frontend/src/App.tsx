@@ -16,6 +16,11 @@ import PosAccountPage from './pages/PosAccountPage';
 import PosChangePinPage from './pages/PosChangePinPage';
 import RevenueReportPage from './pages/RevenueReportPage';
 import InventoryManagementPage from './pages/InventoryManagementPage';
+import InventoryHistoryPage from './pages/InventoryHistoryPage';
+import ProductListPage from './pages/ProductListPage';
+import CategoryListPage from './pages/CategoryListPage';
+import OrderManagementPage from './pages/OrderManagementPage';
+import TableManagementPage from './pages/TableManagementPage';
 
 function App() {
   return (
@@ -48,7 +53,12 @@ function App() {
           <Route path="staff/list" element={<StaffManagementPage />} />
           <Route path="staff/pending" element={<StaffManagementPage />} />
           <Route path="staff/history" element={<StaffManagementPage />} />
+          <Route path="products/categories" element={<CategoryListPage />} />
+          <Route path="products/list" element={<ProductListPage />} />
           <Route path="inventory/manage" element={<InventoryManagementPage />} />
+          <Route path="inventory/history" element={<InventoryHistoryPage />} />
+          <Route path="orders" element={<OrderManagementPage />} />
+          <Route path="tables" element={<TableManagementPage />} />
           <Route path="*" element={<DashboardPage />} />
         </Route>
         

@@ -790,7 +790,7 @@ export default function PosSalesPage() {
 
       {/* Product Detail Bottom Sheet */}
       {selectedProduct && (
-        <div className="pos-modal-overlay" onClick={closePopup}>
+        <div className="pos-modal-overlay">
           <div className="pos-bottom-sheet" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="pos-sheet-header">
@@ -1041,7 +1041,7 @@ export default function PosSalesPage() {
 
       {/* Custom Confirm Dialog */}
       {confirmDialog.open && (
-        <div className="pos-confirm-overlay" onClick={closeConfirm}>
+        <div className="pos-confirm-overlay">
           <div className="pos-confirm-box" onClick={(e) => e.stopPropagation()}>
             <p className="pos-confirm-message">{confirmDialog.message}</p>
             <div className="pos-confirm-actions">
@@ -1054,7 +1054,7 @@ export default function PosSalesPage() {
 
       {/* Custom Success Dialog */}
       {successDialog.open && (
-        <div className="pos-confirm-overlay" onClick={() => setSuccessDialog(prev => ({ ...prev, open: false }))}>
+        <div className="pos-confirm-overlay">
           <div className="pos-confirm-box pos-success-box" onClick={(e) => e.stopPropagation()}>
             <div className="pos-success-icon-wrapper">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1085,7 +1085,7 @@ export default function PosSalesPage() {
       )}
       {/* Edit All Items Popup */}
       {isEditAllOpen && (
-        <div className="pos-modal-overlay" onClick={() => setIsEditAllOpen(false)}>
+        <div className="pos-modal-overlay">
           <div className="pos-edit-all-sheet" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="pos-edit-all-header">

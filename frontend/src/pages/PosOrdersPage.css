@@ -64,7 +64,7 @@
 }
 
 .pos-orders-row:hover {
-  background-color: #f9f9f9;
+  background-color: #f2f9f0;
 }
 
 .pos-orders-col {
@@ -166,7 +166,7 @@
 }
 
 .tables-sheet-body {
-  padding: 24px;
+  padding: 20px;
   overflow-y: auto;
   flex: 1;
 }

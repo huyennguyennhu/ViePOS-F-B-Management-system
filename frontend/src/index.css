@@ -36,3 +36,19 @@ textarea:focus,
 [role="button"]:focus {
   outline: none;
 }
+
+/* Table Row Hover Utilities */
+.hoverable-row {
+  transition: background-color 0.2s;
+}
+.hoverable-row:hover {
+  background-color: #f2f9f0 !important;
+}
+
+.clickable-row {
+  transition: background-color 0.2s;
+  cursor: pointer;
+}
+.clickable-row:hover {
+  background-color: #f2f9f0 !important;
+}

@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { Search, Eye, Edit2, Trash2, X, User } from 'lucide-react';
 import { staffAPI } from '../services/api';
 import './DashboardPage.css';
+import './StaffManagementPage.css';
 
 interface Staff {
   id: string;
@@ -9,6 +11,7 @@ interface Staff {
   email: string;
   phone: string;
   status: string;
+  role?: string;
   createdAt: string;
 }
 
@@ -36,6 +39,26 @@ export default function StaffManagementPage() {
   // Tab 1 Data
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('APPROVED'); // APPROVED or REJECTED or ALL
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Tab 1 CRUD States
+  const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
+  const [isAddStaffModalOpen, setIsAddStaffModalOpen] = useState(false);
+  const [isViewStaffModalOpen, setIsViewStaffModalOpen] = useState(false);
+  const [isEditStaffModalOpen, setIsEditStaffModalOpen] = useState(false);
+  const [isDeleteStaffModalOpen, setIsDeleteStaffModalOpen] = useState(false);
+  const [isBulkDelete, setIsBulkDelete] = useState(false);
+  
+  const [viewingStaff, setViewingStaff] = useState<Staff | null>(null);
+  const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
+  const [deletingStaff, setDeletingStaff] = useState<Staff | null>(null);
+
+  // Form States
+  const [staffFormName, setStaffFormName] = useState('');
+  const [staffFormEmail, setStaffFormEmail] = useState('');
+  const [staffFormPhone, setStaffFormPhone] = useState('');
+  const [staffFormRole, setStaffFormRole] = useState('Nhân viên');
+  const [staffFormStatus, setStaffFormStatus] = useState('APPROVED');
 
   // Tab 2 Data
   const [pendingStaff, setPendingStaff] = useState<Staff[]>([]);
@@ -46,6 +69,14 @@ export default function StaffManagementPage() {
 
   // Tab 3 Data
   const [historyAccounts, setHistoryAccounts] = useState<Staff[]>([]);
+  const [historySearchTerm, setHistorySearchTerm] = useState('');
+  const [historyTypeFilter, setHistoryTypeFilter] = useState('ALL');
+
+  // Pending Action Modals States
+  const [approvingRequest, setApprovingRequest] = useState<{ id: string, name: string, type: string } | null>(null);
+  const [isApproveMultipleModalOpen, setIsApproveMultipleModalOpen] = useState(false);
+  const [rejectingRequest, setRejectingRequest] = useState<{ id: string, name: string, type: string } | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
   const [historyPinReqs, setHistoryPinReqs] = useState<PinRequest[]>([]);
   const [historyPinResets, setHistoryPinResets] = useState<PinRequest[]>([]);
 
@@ -113,76 +144,83 @@ export default function StaffManagementPage() {
   };
 
   // ---- ACTIONS ----
-  const handleApproveAccount = async (id: string, name: string) => {
+  const handleApproveAccount = (id: string, name: string) => {
+    setApprovingRequest({ id, name, type: 'account' });
+  };
+
+  const handleRejectAccount = (id: string, name: string) => {
+    setRejectReason('');
+    setRejectingRequest({ id, name, type: 'account' });
+  };
+
+  const handleApprovePin = (id: string, name: string) => {
+    setApprovingRequest({ id, name, type: 'pin' });
+  };
+
+  const handleRejectPin = (id: string, name: string) => {
+    setRejectReason('');
+    setRejectingRequest({ id, name, type: 'pin' });
+  };
+
+  const handleApprovePinReset = (id: string, name: string) => {
+    setApprovingRequest({ id, name, type: 'reset' });
+  };
+
+  const handleRejectPinReset = (id: string, name: string) => {
+    setRejectReason('');
+    setRejectingRequest({ id, name, type: 'reset' });
+  };
+
+  const handleApproveMultiple = () => {
+    if (selectedIds.length === 0) return;
+    setIsApproveMultipleModalOpen(true);
+  };
+
+  const confirmApproveSingle = async () => {
+    if (!approvingRequest) return;
+    const { id, name, type } = approvingRequest;
     try {
-      await staffAPI.approve(id);
-      showMessage(`Đã duyệt tài khoản cho nhân viên ${name}.`);
+      if (type === 'account') {
+        await staffAPI.approve(id);
+        showMessage(`Đã duyệt tài khoản cho nhân viên ${name}.`);
+      } else if (type === 'pin') {
+        await staffAPI.approvePinRequest(id);
+        showMessage(`Đã duyệt yêu cầu đổi mã PIN của ${name}.`);
+      } else if (type === 'reset') {
+        await staffAPI.approvePinReset(id);
+        showMessage(`Đã duyệt yêu cầu cấp lại mã PIN của ${name}.`);
+      }
       fetchTab2Data();
+      setApprovingRequest(null);
     } catch (err) {
-      alert("Lỗi khi duyệt tài khoản!");
+      alert("Lỗi khi duyệt yêu cầu!");
     }
   };
 
-  const handleRejectAccount = async (id: string, name: string) => {
-    if (window.confirm(`Bạn có chắc chắn muốn từ chối tài khoản ${name}?`)) {
-      try {
+  const confirmRejectSingle = async () => {
+    if (!rejectingRequest) return;
+    const { id, name, type } = rejectingRequest;
+    try {
+      // Tạm thời chưa truyền rejectReason vì API chưa hỗ trợ
+      if (type === 'account') {
         await staffAPI.reject(id);
         showMessage(`Đã từ chối tài khoản ${name}.`);
-        fetchTab2Data();
-      } catch (err) {
-        alert("Lỗi khi từ chối tài khoản!");
-      }
-    }
-  };
-
-  const handleApprovePin = async (id: string, name: string) => {
-    try {
-      await staffAPI.approvePinRequest(id);
-      showMessage(`Đã duyệt yêu cầu đổi mã PIN của ${name}.`);
-      fetchTab2Data();
-    } catch (err) {
-      alert("Lỗi khi duyệt mã PIN!");
-    }
-  };
-
-  const handleRejectPin = async (id: string, name: string) => {
-    if (window.confirm(`Bạn có chắc chắn muốn từ chối yêu cầu đổi mã PIN của ${name}?`)) {
-      try {
+      } else if (type === 'pin') {
         await staffAPI.rejectPinRequest(id);
         showMessage(`Đã từ chối yêu cầu đổi mã PIN của ${name}.`);
-        fetchTab2Data();
-      } catch (err) {
-        alert("Lỗi khi từ chối mã PIN!");
-      }
-    }
-  };
-
-  const handleApprovePinReset = async (id: string, name: string) => {
-    try {
-      await staffAPI.approvePinReset(id);
-      showMessage(`Đã duyệt yêu cầu cấp lại mã PIN của ${name}.`);
-      fetchTab2Data();
-    } catch (err) {
-      alert("Lỗi khi duyệt cấp lại mã PIN!");
-    }
-  };
-
-  const handleRejectPinReset = async (id: string, name: string) => {
-    if (window.confirm(`Bạn có chắc chắn muốn từ chối yêu cầu cấp lại mã PIN của ${name}?`)) {
-      try {
+      } else if (type === 'reset') {
         await staffAPI.rejectPinReset(id);
         showMessage(`Đã từ chối yêu cầu cấp lại mã PIN của ${name}.`);
-        fetchTab2Data();
-      } catch (err) {
-        alert("Lỗi khi từ chối cấp lại mã PIN!");
       }
+      fetchTab2Data();
+      setRejectingRequest(null);
+    } catch (err) {
+      alert("Lỗi khi từ chối yêu cầu!");
     }
   };
 
-  const handleApproveMultiple = async () => {
+  const confirmApproveMultiple = async () => {
     if (selectedIds.length === 0) return;
-    if (!window.confirm(`Bạn có chắc chắn muốn duyệt ${selectedIds.length} yêu cầu?`)) return;
-    
     try {
       setLoading(true);
       if (pendingSubTab === 'accounts') {
@@ -195,6 +233,7 @@ export default function StaffManagementPage() {
       showMessage(`Đã duyệt thành công ${selectedIds.length} yêu cầu.`);
       setSelectedIds([]);
       fetchTab2Data();
+      setIsApproveMultipleModalOpen(false);
     } catch (err) {
       alert("Có lỗi khi duyệt hàng loạt!");
     } finally {
@@ -218,71 +257,237 @@ export default function StaffManagementPage() {
     }
   };
 
+  // ---- LIST TAB HANDLERS ----
+  const toggleSelectListAll = (checked: boolean, allIds: string[]) => {
+    if (checked) {
+      setSelectedListIds(allIds);
+    } else {
+      setSelectedListIds([]);
+    }
+  };
+
+  const toggleSelectListOne = (id: string) => {
+    if (selectedListIds.includes(id)) {
+      setSelectedListIds(selectedListIds.filter(sId => sId !== id));
+    } else {
+      setSelectedListIds([...selectedListIds, id]);
+    }
+  };
+
+  const openAddStaffModal = () => {
+    setStaffFormName('');
+    setStaffFormEmail('');
+    setStaffFormPhone('');
+    setStaffFormRole('Nhân viên');
+    setStaffFormStatus('APPROVED');
+    setIsAddStaffModalOpen(true);
+  };
+
+  const openEditStaffModal = (staff: Staff) => {
+    setEditingStaff(staff);
+    setStaffFormName(staff.name);
+    setStaffFormEmail(staff.email);
+    setStaffFormPhone(staff.phone);
+    setStaffFormRole(staff.role || 'Nhân viên');
+    setStaffFormStatus(staff.status);
+    setIsEditStaffModalOpen(true);
+  };
+
+  const openViewStaffModal = (staff: Staff) => {
+    setViewingStaff(staff);
+    setIsViewStaffModalOpen(true);
+  };
+
+  const openDeleteModal = (staff: Staff | null, isBulk: boolean = false) => {
+    setIsBulkDelete(isBulk);
+    if (!isBulk) {
+      setDeletingStaff(staff);
+    }
+    setIsDeleteStaffModalOpen(true);
+  };
+
+  const handleAddStaff = () => {
+    if (!staffFormName || !staffFormEmail || !staffFormPhone) return;
+    const newStaff: Staff = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: staffFormName,
+      email: staffFormEmail,
+      phone: staffFormPhone,
+      role: staffFormRole,
+      status: staffFormStatus,
+      createdAt: new Date().toISOString()
+    };
+    setStaffList([newStaff, ...staffList]);
+    setIsAddStaffModalOpen(false);
+    setMessage('Đã thêm nhân viên mới thành công!');
+    setTimeout(() => setMessage(''), 3000);
+  };
+
+  const handleEditStaff = () => {
+    if (!editingStaff || !staffFormName || !staffFormEmail || !staffFormPhone) return;
+    const updatedList = staffList.map(s => {
+      if (s.id === editingStaff.id) {
+        return {
+          ...s,
+          name: staffFormName,
+          email: staffFormEmail,
+          phone: staffFormPhone,
+          role: staffFormRole,
+          status: staffFormStatus
+        };
+      }
+      return s;
+    });
+    setStaffList(updatedList);
+    setIsEditStaffModalOpen(false);
+    setEditingStaff(null);
+    setMessage('Đã cập nhật thông tin nhân viên!');
+    setTimeout(() => setMessage(''), 3000);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (isBulkDelete) {
+      setStaffList(staffList.filter(s => !selectedListIds.includes(s.id)));
+      setSelectedListIds([]);
+      setMessage('Đã xóa các nhân viên được chọn!');
+    } else if (deletingStaff) {
+      setStaffList(staffList.filter(s => s.id !== deletingStaff.id));
+      setDeletingStaff(null);
+      setMessage('Đã xóa nhân viên!');
+    }
+    setIsDeleteStaffModalOpen(false);
+    setTimeout(() => setMessage(''), 3000);
+  };
+
   // ---- RENDERS ----
   const renderListTab = () => {
     const filtered = staffList.filter(s => {
+      const matchSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          s.email.toLowerCase().includes(searchTerm.toLowerCase());
+      if (!matchSearch) return false;
+      
       if (filterStatus === 'ALL') return true;
       if (filterStatus === 'APPROVED') return s.status === 'APPROVED';
-      if (filterStatus === 'REJECTED') return s.status === 'REJECTED'; // Ví dụ nghỉ việc/khoá
+      if (filterStatus === 'REJECTED') return s.status === 'REJECTED';
       return true;
     });
 
     return (
-      <div>
-        <div style={{ marginBottom: '16px', display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <span style={{ fontWeight: 600 }}>Lọc theo trạng thái:</span>
-          <select 
-            value={filterStatus} 
-            onChange={(e) => setFilterStatus(e.target.value)}
-            style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-          >
-            <option value="APPROVED">Đang làm việc</option>
-            <option value="REJECTED">Đã nghỉ/Khoá</option>
-            <option value="ALL">Tất cả</option>
-          </select>
+      <div className="staff-list-container">
+        <div className="staff-list-header">
+          <h1 className="staff-list-title">Danh Sách Nhân Viên</h1>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            {selectedListIds.length > 0 && (
+              <button className="btn-add-staff outline" onClick={() => openDeleteModal(null, true)} style={{ backgroundColor: '#fff', color: '#dc3545', border: '1px solid #dc3545' }}>
+                Xóa hàng loạt ({selectedListIds.length})
+              </button>
+            )}
+            <button className="btn-add-staff" onClick={openAddStaffModal}>+ Thêm nhân viên</button>
+          </div>
         </div>
 
-        {loading ? <p>Đang tải...</p> : (
-          <table className="staff-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div className="staff-filter-bar">
+          <div className="staff-search-wrapper">
+            <Search size={18} className="staff-search-icon" />
+            <input 
+              type="text" 
+              className="staff-search-input" 
+              placeholder="Tìm kiếm theo tên hoặc email nhân viên..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          <select 
+            className="staff-filter-select"
+            value={filterStatus} 
+            onChange={(e) => setFilterStatus(e.target.value)}
+          >
+            <option value="ALL">Tất cả trạng thái</option>
+            <option value="APPROVED">Đang làm việc</option>
+            <option value="REJECTED">Đã nghỉ / Khoá</option>
+          </select>
+          
+          <div className="staff-results-count">
+            Kết quả: <span className="staff-count-number">{filtered.length} nhân viên</span>
+          </div>
+        </div>
+
+        <div className="staff-table-container">
+          <table className="staff-table">
             <thead>
-              <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '2px solid #ddd' }}>
-                <th style={{ padding: '12px 16px' }}>Họ và Tên</th>
-                <th style={{ padding: '12px 16px' }}>Email</th>
-                <th style={{ padding: '12px 16px' }}>Số điện thoại</th>
-                <th style={{ padding: '12px 16px' }}>Trạng thái</th>
+              <tr>
+                <th style={{ width: '40px', textAlign: 'center' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={filtered.length > 0 && selectedListIds.length === filtered.length}
+                    onChange={(e) => toggleSelectListAll(e.target.checked, filtered.map(s => s.id))}
+                    className="custom-checkbox"
+                  />
+                </th>
+                <th style={{ width: '90px', textAlign: 'center', whiteSpace: 'nowrap' }}>Hình ảnh</th>
+                <th style={{ width: '20%' }}>Họ và Tên</th>
+                <th style={{ width: '25%' }}>Email</th>
+                <th style={{ width: '15%' }}>Số điện thoại</th>
+                <th style={{ width: '15%' }}>Vai trò</th>
+                <th style={{ width: '15%' }}>Trạng thái</th>
+                <th style={{ width: '10%' }}>Hành động</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(staff => (
-                <tr key={staff.id} style={{ borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: '12px 16px' }}>{staff.name}</td>
-                  <td style={{ padding: '12px 16px' }}>{staff.email}</td>
-                  <td style={{ padding: '12px 16px' }}>{staff.phone}</td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <span style={{
-                      padding: '4px 8px', borderRadius: '4px', fontSize: '12px',
-                      backgroundColor: staff.status === 'APPROVED' ? '#d4edda' : '#f8d7da',
-                      color: staff.status === 'APPROVED' ? '#155724' : '#721c24'
-                    }}>
-                      {staff.status === 'APPROVED' ? 'Đang làm việc' : 'Đã nghỉ/Khoá'}
+                <tr key={staff.id} className="hoverable-row">
+                  <td style={{ textAlign: 'center' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={selectedListIds.includes(staff.id)}
+                      onChange={() => toggleSelectListOne(staff.id)}
+                      className="custom-checkbox"
+                    />
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    <div className="staff-avatar-placeholder">
+                      <User size={20} color="#999" />
+                    </div>
+                  </td>
+                  <td className="staff-name">{staff.name}</td>
+                  <td>{staff.email}</td>
+                  <td>{staff.phone}</td>
+                  <td>{staff.role || 'Nhân viên'}</td>
+                  <td>
+                    <span className={`status-badge ${staff.status === 'APPROVED' ? 'safe' : 'danger'}`}>
+                      {staff.status === 'APPROVED' ? 'Đang làm việc' : 'Đã nghỉ / Khoá'}
                     </span>
+                  </td>
+                  <td>
+                    <div className="product-actions">
+                      <button className="btn-icon-action" title="Xem chi tiết" onClick={() => openViewStaffModal(staff)}><Eye size={16} /></button>
+                      <button className="btn-icon-action" title="Chỉnh sửa" onClick={() => openEditStaffModal(staff)}><Edit2 size={16} /></button>
+                      <button className="btn-icon-action delete" title="Xóa" onClick={() => openDeleteModal(staff)}><Trash2 size={16} /></button>
+                    </div>
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
-                <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#888' }}>Không có dữ liệu.</td></tr>
+              {filtered.length === 0 && !loading && (
+                <tr>
+                  <td colSpan={7} style={{ padding: '32px', textAlign: 'center', color: '#888' }}>
+                    Không tìm thấy nhân viên nào phù hợp.
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
-        )}
+        </div>
       </div>
     );
   };
 
   const renderPendingTab = () => (
-    <div>
-      {loading && <p>Đang tải...</p>}
-      
+    <div className="staff-list-container">
+      <div className="staff-list-header">
+        <h1 className="staff-list-title">Yêu Cầu Nhân Viên</h1>
+      </div>
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '1px solid #ddd', marginBottom: '20px' }}>
         <div style={{ display: 'flex', gap: '20px' }}>
           <div 
@@ -320,127 +525,141 @@ export default function StaffManagementPage() {
       </div>
 
       {pendingSubTab === 'accounts' && (
-        <div style={{ marginBottom: '30px' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div className="staff-table-container">
+          <table className="staff-table">
             <thead>
-              <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '2px solid #ddd' }}>
-                <th style={{ padding: '12px 16px', width: '40px' }}>
+              <tr>
+                <th style={{ width: '40px', textAlign: 'center' }}>
                   <input 
                     type="checkbox" 
                     checked={pendingStaff.length > 0 && selectedIds.length === pendingStaff.length}
                     onChange={(e) => toggleSelectAll(e.target.checked, pendingStaff.map(s => s.id))}
+                    className="custom-checkbox"
                   />
                 </th>
-                <th style={{ padding: '12px 16px' }}>Họ và Tên</th>
-                <th style={{ padding: '12px 16px' }}>Email</th>
-                <th style={{ padding: '12px 16px' }}>Hành động</th>
+                <th>Họ và Tên</th>
+                <th>Email</th>
+                <th>Số điện thoại</th>
+                <th>Hành động</th>
               </tr>
             </thead>
             <tbody>
               {pendingStaff.map(staff => (
-                <tr key={staff.id} style={{ borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: '12px 16px' }}>
+                <tr key={staff.id} className="hoverable-row">
+                  <td style={{ textAlign: 'center' }}>
                     <input 
                       type="checkbox" 
                       checked={selectedIds.includes(staff.id)}
                       onChange={() => toggleSelectOne(staff.id)}
+                      className="custom-checkbox"
                     />
                   </td>
-                  <td style={{ padding: '12px 16px' }}>{staff.name}</td>
-                  <td style={{ padding: '12px 16px' }}>{staff.email}</td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <button onClick={() => handleApproveAccount(staff.id, staff.name)} className="btn-approve">Duyệt</button>
-                    <button onClick={() => handleRejectAccount(staff.id, staff.name)} className="btn-reject">Từ chối</button>
+                  <td className="staff-name">{staff.name}</td>
+                  <td>{staff.email}</td>
+                  <td>{staff.phone}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={() => handleApproveAccount(staff.id, staff.name)} className="btn-approve">Duyệt</button>
+                      <button onClick={() => handleRejectAccount(staff.id, staff.name)} className="btn-reject">Từ chối</button>
+                    </div>
                   </td>
                 </tr>
               ))}
-              {pendingStaff.length === 0 && <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#888' }}>Không có yêu cầu nào.</td></tr>}
+              {pendingStaff.length === 0 && !loading && <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#888' }}>Không có yêu cầu nào.</td></tr>}
             </tbody>
           </table>
         </div>
       )}
 
       {pendingSubTab === 'pins' && (
-        <div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div className="staff-table-container">
+          <table className="staff-table">
             <thead>
-              <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '2px solid #ddd' }}>
-                <th style={{ padding: '12px 16px', width: '40px' }}>
+              <tr>
+                <th style={{ width: '40px', textAlign: 'center' }}>
                   <input 
                     type="checkbox" 
                     checked={pendingPinReqs.length > 0 && selectedIds.length === pendingPinReqs.length}
                     onChange={(e) => toggleSelectAll(e.target.checked, pendingPinReqs.map(s => s.id))}
+                    className="custom-checkbox"
                   />
                 </th>
-                <th style={{ padding: '12px 16px' }}>Họ và Tên</th>
-                <th style={{ padding: '12px 16px' }}>Email</th>
-                <th style={{ padding: '12px 16px' }}>Thời gian gửi</th>
-                <th style={{ padding: '12px 16px' }}>Hành động</th>
+                <th>Họ và Tên</th>
+                <th>Email</th>
+                <th>Thời gian gửi</th>
+                <th>Hành động</th>
               </tr>
             </thead>
             <tbody>
               {pendingPinReqs.map(req => (
-                <tr key={req.id} style={{ borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: '12px 16px' }}>
+                <tr key={req.id} className="hoverable-row">
+                  <td style={{ textAlign: 'center' }}>
                     <input 
                       type="checkbox" 
                       checked={selectedIds.includes(req.id)}
                       onChange={() => toggleSelectOne(req.id)}
+                      className="custom-checkbox"
                     />
                   </td>
-                  <td style={{ padding: '12px 16px' }}>{req.user?.name}</td>
-                  <td style={{ padding: '12px 16px' }}>{req.user?.email}</td>
-                  <td style={{ padding: '12px 16px' }}>{new Date(req.createdAt).toLocaleString('vi-VN')}</td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <button onClick={() => handleApprovePin(req.id, req.user?.name)} className="btn-approve">Duyệt</button>
-                    <button onClick={() => handleRejectPin(req.id, req.user?.name)} className="btn-reject">Từ chối</button>
+                  <td className="staff-name">{req.user?.name}</td>
+                  <td>{req.user?.email}</td>
+                  <td>{new Date(req.createdAt).toLocaleString('vi-VN')}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={() => handleApprovePin(req.id, req.user?.name)} className="btn-approve">Duyệt</button>
+                      <button onClick={() => handleRejectPin(req.id, req.user?.name)} className="btn-reject">Từ chối</button>
+                    </div>
                   </td>
                 </tr>
               ))}
-              {pendingPinReqs.length === 0 && <tr><td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: '#888' }}>Không có yêu cầu nào.</td></tr>}
+              {pendingPinReqs.length === 0 && !loading && <tr><td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: '#888' }}>Không có yêu cầu nào.</td></tr>}
             </tbody>
           </table>
         </div>
       )}
 
       {pendingSubTab === 'resets' && (
-        <div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div className="staff-table-container">
+          <table className="staff-table">
             <thead>
-              <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '2px solid #ddd' }}>
-                <th style={{ padding: '12px 16px', width: '40px' }}>
+              <tr>
+                <th style={{ width: '40px', textAlign: 'center' }}>
                   <input 
                     type="checkbox" 
                     checked={pendingPinResets.length > 0 && selectedIds.length === pendingPinResets.length}
                     onChange={(e) => toggleSelectAll(e.target.checked, pendingPinResets.map(s => s.id))}
+                    className="custom-checkbox"
                   />
                 </th>
-                <th style={{ padding: '12px 16px' }}>Họ và Tên</th>
-                <th style={{ padding: '12px 16px' }}>Email</th>
-                <th style={{ padding: '12px 16px' }}>Thời gian gửi</th>
-                <th style={{ padding: '12px 16px' }}>Hành động</th>
+                <th>Họ và Tên</th>
+                <th>Email</th>
+                <th>Thời gian gửi</th>
+                <th>Hành động</th>
               </tr>
             </thead>
             <tbody>
               {pendingPinResets.map(req => (
-                <tr key={req.id} style={{ borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: '12px 16px' }}>
+                <tr key={req.id} className="hoverable-row">
+                  <td style={{ textAlign: 'center' }}>
                     <input 
                       type="checkbox" 
                       checked={selectedIds.includes(req.id)}
                       onChange={() => toggleSelectOne(req.id)}
+                      className="custom-checkbox"
                     />
                   </td>
-                  <td style={{ padding: '12px 16px' }}>{req.user?.name}</td>
-                  <td style={{ padding: '12px 16px' }}>{req.user?.email}</td>
-                  <td style={{ padding: '12px 16px' }}>{new Date(req.createdAt).toLocaleString('vi-VN')}</td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <button onClick={() => handleApprovePinReset(req.id, req.user?.name)} className="btn-approve">Duyệt</button>
-                    <button onClick={() => handleRejectPinReset(req.id, req.user?.name)} className="btn-reject">Từ chối</button>
+                  <td className="staff-name">{req.user?.name}</td>
+                  <td>{req.user?.email}</td>
+                  <td>{new Date(req.createdAt).toLocaleString('vi-VN')}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={() => handleApprovePinReset(req.id, req.user?.name)} className="btn-approve">Duyệt</button>
+                      <button onClick={() => handleRejectPinReset(req.id, req.user?.name)} className="btn-reject">Từ chối</button>
+                    </div>
                   </td>
                 </tr>
               ))}
-              {pendingPinResets.length === 0 && <tr><td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: '#888' }}>Không có yêu cầu nào.</td></tr>}
+              {pendingPinResets.length === 0 && !loading && <tr><td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: '#888' }}>Không có yêu cầu nào.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -449,7 +668,7 @@ export default function StaffManagementPage() {
   );
 
   const renderHistoryTab = () => {
-    const combinedHistory = [
+    let combinedHistory = [
       ...historyAccounts.map(a => ({ id: a.id, name: a.name, email: a.email, type: 'Cấp tài khoản mới', status: a.status, date: a.createdAt })),
       ...historyPinReqs.map(p => ({ id: p.id, name: p.user?.name, email: p.user?.email, type: 'Đổi mã PIN', status: p.status, date: p.createdAt })),
       ...historyPinResets.map(r => ({ id: r.id, name: r.user?.name, email: r.user?.email, type: 'Quên mã PIN', status: r.status, date: r.createdAt }))
@@ -457,42 +676,84 @@ export default function StaffManagementPage() {
     
     combinedHistory.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+    if (historySearchTerm.trim()) {
+      const lowerTerm = historySearchTerm.toLowerCase();
+      combinedHistory = combinedHistory.filter(item => 
+        (item.name && item.name.toLowerCase().includes(lowerTerm)) || 
+        (item.email && item.email.toLowerCase().includes(lowerTerm))
+      );
+    }
+
+    if (historyTypeFilter !== 'ALL') {
+      combinedHistory = combinedHistory.filter(item => item.type === historyTypeFilter);
+    }
+
     return (
-      <div>
-        {loading && <p>Đang tải...</p>}
-        
-        <div style={{ marginBottom: '30px' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+      <div className="staff-list-container">
+        <div className="staff-list-header">
+          <h1 className="staff-list-title">Lịch Sử Phê Duyệt</h1>
+        </div>
+
+        <div className="staff-filter-bar">
+          <div className="staff-search-wrapper">
+            <Search size={18} className="staff-search-icon" />
+            <input 
+              type="text" 
+              className="staff-search-input" 
+              placeholder="Tìm kiếm theo tên hoặc email..." 
+              value={historySearchTerm}
+              onChange={(e) => setHistorySearchTerm(e.target.value)}
+            />
+          </div>
+
+          <select 
+            className="staff-filter-select"
+            value={historyTypeFilter} 
+            onChange={(e) => setHistoryTypeFilter(e.target.value)}
+          >
+            <option value="ALL">Tất cả loại yêu cầu</option>
+            <option value="Cấp tài khoản mới">Cấp tài khoản mới</option>
+            <option value="Đổi mã PIN">Đổi mã PIN</option>
+            <option value="Quên mã PIN">Quên mã PIN</option>
+          </select>
+          
+          <div className="staff-results-count">
+            Kết quả: <span className="staff-count-number">{combinedHistory.length} yêu cầu</span>
+          </div>
+        </div>
+
+        <div className="staff-table-container">
+          <table className="staff-table">
             <thead>
-              <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '2px solid #ddd' }}>
-                <th style={{ padding: '12px 16px' }}>Họ và Tên</th>
-                <th style={{ padding: '12px 16px' }}>Email</th>
-                <th style={{ padding: '12px 16px' }}>Loại yêu cầu</th>
-                <th style={{ padding: '12px 16px' }}>Kết quả</th>
-                <th style={{ padding: '12px 16px' }}>Thời gian duyệt</th>
+              <tr>
+                <th>Họ và Tên</th>
+                <th>Email</th>
+                <th>Loại yêu cầu</th>
+                <th>Kết quả</th>
+                <th>Thời gian duyệt</th>
               </tr>
             </thead>
             <tbody>
               {combinedHistory.map((item, index) => (
-                <tr key={`${item.id}-${index}`} style={{ borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: '12px 16px' }}>{item.name}</td>
-                  <td style={{ padding: '12px 16px' }}>{item.email}</td>
-                  <td style={{ padding: '12px 16px' }}>
+                <tr key={`${item.id}-${index}`} className="hoverable-row">
+                  <td className="staff-name">{item.name}</td>
+                  <td>{item.email}</td>
+                  <td>
                     <span style={{ 
-                      padding: '4px 8px', borderRadius: '4px', fontSize: '12px',
+                      padding: '6px 12px', borderRadius: '20px', fontSize: '13px', fontWeight: 500,
                       backgroundColor: item.type === 'Cấp tài khoản mới' ? '#e3f2fd' : item.type === 'Đổi mã PIN' ? '#fff3cd' : '#f8d7da',
                       color: item.type === 'Cấp tài khoản mới' ? '#0d47a1' : item.type === 'Đổi mã PIN' ? '#856404' : '#721c24'
                     }}>
                       {item.type}
                     </span>
                   </td>
-                  <td style={{ padding: '12px 16px', fontWeight: 'bold', color: item.status === 'APPROVED' ? '#256E05' : '#dc3545' }}>
+                  <td style={{ fontWeight: 'bold', color: item.status === 'APPROVED' ? '#256E05' : '#dc3545' }}>
                     {item.status === 'APPROVED' ? 'Đã duyệt' : 'Đã từ chối'}
                   </td>
-                  <td style={{ padding: '12px 16px' }}>{new Date(item.date).toLocaleString('vi-VN')}</td>
+                  <td>{new Date(item.date).toLocaleString('vi-VN')}</td>
                 </tr>
               ))}
-              {combinedHistory.length === 0 && <tr><td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: '#888' }}>Không có dữ liệu lịch sử.</td></tr>}
+              {combinedHistory.length === 0 && !loading && <tr><td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#888', fontSize: '15px' }}>Không tìm thấy dữ liệu lịch sử nào phù hợp.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -501,21 +762,336 @@ export default function StaffManagementPage() {
   };
 
   return (
-    <div className="report-page">
-      <div className="report-card" style={{ display: 'block', padding: '24px' }}>
-        
-        {message && (
-          <div style={{ backgroundColor: '#d4edda', color: '#155724', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px', fontSize: '14px' }}>
-            {message}
-          </div>
-        )}
-
-        <div style={{ marginTop: '0px' }}>
-          {activeTab === 'list' && renderListTab()}
-          {activeTab === 'pending' && renderPendingTab()}
-          {activeTab === 'history' && renderHistoryTab()}
+    <>
+      {message && (
+        <div style={{ backgroundColor: '#d4edda', color: '#155724', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px', fontSize: '14px', margin: '20px' }}>
+          {message}
         </div>
-      </div>
-    </div>
+      )}
+
+      {activeTab === 'list' ? (
+        renderListTab()
+      ) : (
+        <div className="report-page">
+          <div className="report-card" style={{ display: 'block' /*, padding: '24px' */ }}>
+            {activeTab === 'pending' && renderPendingTab()}
+            {activeTab === 'history' && renderHistoryTab()}
+          </div>
+        </div>
+      )}
+
+      {/* Add Staff Modal */}
+      {isAddStaffModalOpen && (
+        <div className="add-modal-overlay">
+          <div className="add-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="add-modal-header">
+              <h2 className="add-modal-title">Thêm Nhân Viên Mới</h2>
+              {/* <button className="btn-close-modal" onClick={() => setIsAddStaffModalOpen(false)}><X size={20} /></button> */}
+            </div>
+            
+            <div className="add-modal-body">
+              <div className="form-group">
+                <label>Tên nhân viên <span style={{ color: 'red' }}>*</span></label>
+                <input type="text" className="modal-input" placeholder="Nhập tên nhân viên" value={staffFormName} onChange={e => setStaffFormName(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Email <span style={{ color: 'red' }}>*</span></label>
+                <input type="email" className="modal-input" placeholder="example@email.com" value={staffFormEmail} onChange={e => setStaffFormEmail(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Số điện thoại <span style={{ color: 'red' }}>*</span></label>
+                <input type="text" className="modal-input" placeholder="0901234567" value={staffFormPhone} onChange={e => setStaffFormPhone(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Vai trò <span style={{ color: 'red' }}>*</span></label>
+                <select className="modal-input" value={staffFormRole} onChange={e => setStaffFormRole(e.target.value)}>
+                  <option value="Quản lý">Quản lý</option>
+                  <option value="Nhân viên">Nhân viên</option>
+                  <option value="Thu ngân">Thu ngân</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="add-modal-footer">
+              <button className="btn-cancel" onClick={() => setIsAddStaffModalOpen(false)}>Hủy</button>
+              <button 
+                className="btn-save" 
+                onClick={handleAddStaff}
+                disabled={!staffFormName || !staffFormEmail || !staffFormPhone}
+                style={{ opacity: (!staffFormName || !staffFormEmail || !staffFormPhone) ? 0.5 : 1, cursor: (!staffFormName || !staffFormEmail || !staffFormPhone) ? 'not-allowed' : 'pointer' }}
+              >
+                THÊM NHÂN VIÊN
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Staff Modal */}
+      {isEditStaffModalOpen && editingStaff && (
+        <div className="add-modal-overlay">
+          <div className="add-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="add-modal-header">
+              <h2 className="add-modal-title">Chỉnh Sửa Thông Tin Nhân Viên</h2>
+              {/* <button className="btn-close-modal" onClick={() => setIsEditStaffModalOpen(false)}><X size={20} /></button> */}
+            </div>
+            
+            <div className="add-modal-body">
+              <div className="form-group">
+                <label>Tên nhân viên <span style={{ color: 'red' }}>*</span></label>
+                <input type="text" className="modal-input" placeholder="Nhập tên nhân viên" value={staffFormName} onChange={e => setStaffFormName(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Email <span style={{ color: 'red' }}>*</span></label>
+                <input type="email" className="modal-input" placeholder="example@email.com" value={staffFormEmail} onChange={e => setStaffFormEmail(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Số điện thoại <span style={{ color: 'red' }}>*</span></label>
+                <input type="text" className="modal-input" placeholder="0901234567" value={staffFormPhone} onChange={e => setStaffFormPhone(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Vai trò <span style={{ color: 'red' }}>*</span></label>
+                <select className="modal-input" value={staffFormRole} onChange={e => setStaffFormRole(e.target.value)}>
+                  <option value="Quản lý">Quản lý</option>
+                  <option value="Nhân viên">Nhân viên</option>
+                  <option value="Thu ngân">Thu ngân</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Trạng thái</label>
+                <select className="modal-input" value={staffFormStatus} onChange={e => setStaffFormStatus(e.target.value)}>
+                  <option value="APPROVED">Đang làm việc</option>
+                  <option value="REJECTED">Đã nghỉ / Khoá</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="add-modal-footer">
+              <button className="btn-cancel" onClick={() => setIsEditStaffModalOpen(false)}>Hủy</button>
+              <button 
+                className="btn-save" 
+                onClick={handleEditStaff}
+                disabled={!staffFormName || !staffFormEmail || !staffFormPhone}
+                style={{ opacity: (!staffFormName || !staffFormEmail || !staffFormPhone) ? 0.5 : 1, cursor: (!staffFormName || !staffFormEmail || !staffFormPhone) ? 'not-allowed' : 'pointer' }}
+              >
+                LƯU THAY ĐỔI
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Staff Modal */}
+      {isViewStaffModalOpen && viewingStaff && (
+        <div className="add-modal-overlay">
+          <div className="add-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="add-modal-header">
+              <h2 className="add-modal-title">Thông Tin Nhân Viên</h2>
+              <button className="btn-close-modal" onClick={() => setIsViewStaffModalOpen(false)}><X size={20} /></button>
+            </div>
+            
+            <div className="add-modal-body">
+              <div className="form-group">
+                <label>Tên nhân viên</label>
+                <input type="text" className="modal-input" value={viewingStaff.name} disabled />
+              </div>
+              <div className="form-group">
+                <label>Email</label>
+                <input type="email" className="modal-input" value={viewingStaff.email} disabled />
+              </div>
+              <div className="form-group">
+                <label>Số điện thoại</label>
+                <input type="text" className="modal-input" value={viewingStaff.phone} disabled />
+              </div>
+              <div className="form-group">
+                <label>Vai trò</label>
+                <input type="text" className="modal-input" value={viewingStaff.role || 'Nhân viên'} disabled />
+              </div>
+              <div className="form-group">
+                <label>Trạng thái</label>
+                <input type="text" className="modal-input" value={viewingStaff.status === 'APPROVED' ? 'Đang làm việc' : 'Đã nghỉ / Khoá'} disabled />
+              </div>
+              <div className="form-group">
+                <label>Ngày tham gia</label>
+                <input type="text" className="modal-input" value={new Date(viewingStaff.createdAt).toLocaleString('vi-VN')} disabled />
+              </div>
+            </div>
+
+            <div className="add-modal-footer" style={{ justifyContent: 'flex-end' }}>
+              {/* <button className="btn-cancel" onClick={() => setIsViewStaffModalOpen(false)}>Đóng</button> */}
+              <button 
+                className="btn-save" 
+                onClick={() => {
+                  setIsViewStaffModalOpen(false);
+                  openEditStaffModal(viewingStaff);
+                }}
+              >
+                CHỈNH SỬA
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Approve Single Modal */}
+      {approvingRequest && (
+        <div className="add-modal-overlay">
+          <div className="add-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="add-modal-header">
+              <h2 className="add-modal-title">Xác Nhận Duyệt</h2>
+            </div>
+            <div className="add-modal-body" style={{ textAlign: 'center', padding: '20px' }}>
+              <div style={{ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: '#e8f5e9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: '#256e05' }}>
+                <Eye size={30} />
+              </div>
+              <p style={{ fontSize: '16px', color: '#333', margin: '0 0 10px 0' }}>Bạn có chắc chắn muốn duyệt yêu cầu của</p>
+              <h3 style={{ margin: '0 0 20px 0', color: '#256e05', fontSize: '20px' }}>{approvingRequest.name}</h3>
+              <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>Loại: {approvingRequest.type === 'account' ? 'Cấp tài khoản mới' : approvingRequest.type === 'pin' ? 'Đổi mã PIN' : 'Quên mật khẩu'}</p>
+            </div>
+            <div className="add-modal-footer">
+              <button className="btn-cancel" onClick={() => setApprovingRequest(null)}>Hủy</button>
+              <button className="btn-save" onClick={confirmApproveSingle}>Duyệt Ngay</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Approve Multiple Modal */}
+      {isApproveMultipleModalOpen && (
+        <div className="add-modal-overlay">
+          <div className="add-modal-content" onClick={(e) => e.stopPropagation()} style={{ width: '500px' }}>
+            <div className="add-modal-header">
+              <h2 className="add-modal-title">Duyệt Yêu Cầu Hàng Loạt</h2>
+            </div>
+            <div className="add-modal-body">
+              <p style={{ margin: '0 0 10px 0', fontSize: '15px' }}>Bạn đang chuẩn bị duyệt <b>{selectedIds.length}</b> yêu cầu {pendingSubTab === 'accounts' ? 'cấp tài khoản mới' : pendingSubTab === 'pins' ? 'đổi mã PIN' : 'quên mật khẩu'}.</p>
+              <div className="scrollable-list-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Họ và Tên</th>
+                      <th>Email</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedIds.map(id => {
+                      const staff = pendingSubTab === 'accounts' ? pendingStaff.find(s => s.id === id) :
+                                    pendingSubTab === 'pins' ? pendingPinReqs.find(s => s.id === id) :
+                                    pendingPinResets.find(s => s.id === id);
+                      if (!staff) return null;
+                      const name = pendingSubTab === 'accounts' ? (staff as Staff).name : (staff as PinRequest).user?.name;
+                      const email = pendingSubTab === 'accounts' ? (staff as Staff).email : (staff as PinRequest).user?.email;
+                      return (
+                        <tr key={id}>
+                          <td>{name}</td>
+                          <td>{email}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="add-modal-footer">
+              <button className="btn-cancel" onClick={() => setIsApproveMultipleModalOpen(false)}>Hủy</button>
+              <button className="btn-save" onClick={confirmApproveMultiple}>Duyệt Tất Cả</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Reject Modal */}
+      {rejectingRequest && (
+        <div className="add-modal-overlay">
+          <div className="add-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="add-modal-header">
+              <h2 className="add-modal-title" style={{ color: '#dc3545' }}>Từ Chối Yêu Cầu</h2>
+            </div>
+            <div className="add-modal-body">
+              <p style={{ margin: '0 0 15px 0', fontSize: '15px' }}>Từ chối yêu cầu của <b>{rejectingRequest.name}</b>?</p>
+              <div className="form-group">
+                <label>Lý do từ chối <span style={{ color: 'red' }}>*</span></label>
+                <textarea 
+                  className="reject-reason-input" 
+                  placeholder="Bắt buộc nhập lý do từ chối..."
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="add-modal-footer">
+              <button className="btn-cancel" onClick={() => setRejectingRequest(null)}>Hủy</button>
+              <button 
+                className="btn-save" 
+                style={{ 
+                  backgroundColor: !rejectReason.trim() ? '#ccc' : '#dc3545',
+                  border: 'none',
+                  cursor: !rejectReason.trim() ? 'not-allowed' : 'pointer'
+                }} 
+                onClick={confirmRejectSingle}
+                disabled={!rejectReason.trim()}
+              >
+                Xác Nhận Từ Chối
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Staff Modal */}
+      {isDeleteStaffModalOpen && (
+        <div className="add-modal-overlay">
+          <div className="delete-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <div style={{ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: '#ffe6e6', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', color: '#dc3545' }}>
+                <Trash2 size={32} />
+              </div>
+              <h2 style={{ margin: '0 0 12px 0', color: '#333', fontSize: '20px' }}>Xác nhận xóa</h2>
+              <p style={{ margin: '0 0 24px 0', color: '#666', fontSize: '15px', lineHeight: '1.5' }}>
+                Bạn có chắc chắn muốn xóa {isBulkDelete ? `${selectedListIds.length} nhân viên đã chọn` : `nhân viên "${deletingStaff?.name}"`} không?<br/>
+                Hành động này không thể hoàn tác.
+              </p>
+              {isBulkDelete && selectedListIds.length > 0 && (
+                <div className="scrollable-list-container" style={{ width: '100%', marginBottom: '24px', textAlign: 'left', maxHeight: '200px' }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th style={{ backgroundColor: '#fff5f5', borderBottomColor: '#ffcccc', whiteSpace: 'nowrap' }}>Họ và Tên</th>
+                        <th style={{ backgroundColor: '#fff5f5', borderBottomColor: '#ffcccc', whiteSpace: 'nowrap' }}>Email</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedListIds.map(id => {
+                        const staff = staffList.find(s => s.id === id);
+                        return (
+                          <tr key={id}>
+                            <td style={{ fontWeight: '500' }}>{staff?.name}</td>
+                            <td>{staff?.email}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
+                <button 
+                  onClick={() => setIsDeleteStaffModalOpen(false)}
+                  style={{ flex: 1, padding: '12px', backgroundColor: '#f0f0f0', border: 'none', borderRadius: '6px', fontWeight: '600', color: '#444', cursor: 'pointer' }}
+                >
+                  Hủy
+                </button>
+                <button 
+                  onClick={handleDeleteConfirm}
+                  style={{ flex: 1, padding: '12px', backgroundColor: '#dc3545', border: 'none', borderRadius: '6px', fontWeight: '600', color: 'white', cursor: 'pointer' }}
+                >
+                  Xóa
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

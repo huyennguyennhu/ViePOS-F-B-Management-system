@@ -67,11 +67,11 @@ const topProducts = [
 ];
 
 const orderList = [
-  { id: 'ORD-023', time: '15:32 - 19/05', staff: 'Nguyễn Văn A', type: 'Mang đi', typeColor: '#fef0e6', typeTextColor: '#d97706', total: '75.000đ', status: 'Hoàn thành', statusColor: '#e8f5e9', statusTextColor: '#256e05' },
-  { id: 'ORD-022', time: '15:20 - 19/05', staff: 'Nguyễn Văn A', type: '4H', typeColor: '#e6f0ff', typeTextColor: '#0056b3', total: '35.000đ', status: 'Hoàn thành', statusColor: '#e8f5e9', statusTextColor: '#256e05' },
-  { id: 'ORD-021', time: '14:55 - 19/05', staff: 'Nguyễn Văn A', type: 'Cả ngày', typeColor: '#f3e8ff', typeTextColor: '#7e22ce', total: '90.000đ', status: 'Hoàn thành', statusColor: '#e8f5e9', statusTextColor: '#256e05' },
-  { id: 'ORD-020', time: '14:12 - 19/05', staff: 'Nguyễn Văn A', type: 'Cả ngày', typeColor: '#f3e8ff', typeTextColor: '#7e22ce', total: '45.000đ', status: 'Đã hủy', statusColor: '#fce4e4', statusTextColor: '#dc3545' },
-  { id: 'ORD-019', time: '13:30 - 19/05', staff: 'Nguyễn Văn A', type: '4H', typeColor: '#e6f0ff', typeTextColor: '#0056b3', total: '175.000đ', status: 'Hoàn thành', statusColor: '#e8f5e9', statusTextColor: '#256e05' },
+  { id: 'ORD-023', time: '15:32 - 19/05', staff: 'Nguyễn Văn A', type: 'Mang đi', typeColor: '#fef0e6', typeTextColor: '#d97706', total: '75.000đ', status: 'Hoàn thành', statusColor: '#e8f5e9', statusTextColor: '#256e05', paymentMethod: 'Tiền mặt' },
+  { id: 'ORD-022', time: '15:20 - 19/05', staff: 'Nguyễn Văn A', type: '4H', typeColor: '#e6f0ff', typeTextColor: '#0056b3', total: '35.000đ', status: 'Hoàn thành', statusColor: '#e8f5e9', statusTextColor: '#256e05', paymentMethod: 'Chuyển khoản' },
+  { id: 'ORD-021', time: '14:55 - 19/05', staff: 'Nguyễn Văn A', type: 'Cả ngày', typeColor: '#f3e8ff', typeTextColor: '#7e22ce', total: '90.000đ', status: 'Hoàn thành', statusColor: '#e8f5e9', statusTextColor: '#256e05', paymentMethod: 'MoMo' },
+  { id: 'ORD-020', time: '14:12 - 19/05', staff: 'Nguyễn Văn A', type: 'Cả ngày', typeColor: '#f3e8ff', typeTextColor: '#7e22ce', total: '45.000đ', status: 'Đã hủy', statusColor: '#fce4e4', statusTextColor: '#dc3545', paymentMethod: 'Thẻ VISA' },
+  { id: 'ORD-019', time: '13:30 - 19/05', staff: 'Nguyễn Văn A', type: '4H', typeColor: '#e6f0ff', typeTextColor: '#0056b3', total: '175.000đ', status: 'Hoàn thành', statusColor: '#e8f5e9', statusTextColor: '#256e05', paymentMethod: 'Tiền mặt' },
 ];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -162,13 +162,50 @@ export default function RevenueReportPage() {
   };
 
   const handleFromDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFromDate(e.target.value);
-    setFilterType('Tùy chỉnh');
+    const val = e.target.value;
+    if (!val) {
+      setFromDate('');
+      setFilterType('Tùy chỉnh');
+      return;
+    }
+    let newFrom = val;
+    if (val > toDate && toDate !== '') {
+      newFrom = toDate;
+    }
+    setFromDate(newFrom);
+    
+    if (newFrom === toDate && newFrom !== '') {
+      setFilterType('Ngày');
+    } else {
+      setFilterType('Tùy chỉnh');
+    }
   };
 
   const handleToDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setToDate(e.target.value);
-    setFilterType('Tùy chỉnh');
+    const val = e.target.value;
+    if (!val) {
+      setToDate('');
+      setFilterType('Tùy chỉnh');
+      return;
+    }
+    
+    let newTo = val;
+    if (val > todayStr) {
+      newTo = todayStr;
+    }
+    setToDate(newTo);
+    
+    let currentFrom = fromDate;
+    if (newTo < fromDate && fromDate !== '') {
+      setFromDate(newTo);
+      currentFrom = newTo;
+    }
+    
+    if (currentFrom === newTo && newTo !== '') {
+      setFilterType('Ngày');
+    } else {
+      setFilterType('Tùy chỉnh');
+    }
   };
 
   let currentChartData = revenueData;
@@ -222,13 +259,13 @@ export default function RevenueReportPage() {
           <div className="date-input-wrapper">
             <span className="date-label">Từ:</span>
             <div className="date-input-inner">
-              <input type="date" value={fromDate} onChange={handleFromDateChange} className="date-input" />
+              <input type="date" value={fromDate} max={toDate} onChange={handleFromDateChange} className="date-input" />
             </div>
           </div>
           <div className="date-input-wrapper">
             <span className="date-label">Đến:</span>
             <div className="date-input-inner">
-              <input type="date" value={toDate} onChange={handleToDateChange} className="date-input" />
+              <input type="date" value={toDate} max={todayStr} onChange={handleToDateChange} className="date-input" />
             </div>
           </div>
 
@@ -257,12 +294,10 @@ export default function RevenueReportPage() {
             </div>
             <span className="metric-title">Tổng Doanh Thu</span>
           </div>
-          <div className="metric-body">
-            <div className="metric-value">4.250.000đ</div>
-            <div className="metric-badge-container">
-              <div className="metric-badge positive">+2,34%</div>
-              <span className="metric-comparison">So với kỳ trước</span>
-            </div>
+          <div className="metric-value">4.250.000đ</div>
+          <div className="metric-badge-container">
+            <div className="metric-badge positive">+2,34%</div>
+            <span className="metric-comparison">So với kỳ trước</span>
           </div>
         </div>
 
@@ -273,12 +308,10 @@ export default function RevenueReportPage() {
             </div>
             <span className="metric-title">Tổng Đơn</span>
           </div>
-          <div className="metric-body">
-            <div className="metric-value red-text">85 đơn</div>
-            <div className="metric-badge-container">
-              <div className="metric-badge negative">-4,7%</div>
-              <span className="metric-comparison">So với kỳ trước</span>
-            </div>
+          <div className="metric-value red-text">85 đơn</div>
+          <div className="metric-badge-container">
+            <div className="metric-badge negative">-4,7%</div>
+            <span className="metric-comparison">So với kỳ trước</span>
           </div>
         </div>
 
@@ -289,12 +322,10 @@ export default function RevenueReportPage() {
             </div>
             <span className="metric-title">Trung Bình Giá Trị Đơn</span>
           </div>
-          <div className="metric-body">
-            <div className="metric-value green-text">50.000đ</div>
-            <div className="metric-badge-container">
-              <div className="metric-badge positive">+2%</div>
-              <span className="metric-comparison">So với kỳ trước</span>
-            </div>
+          <div className="metric-value green-text">50.000đ</div>
+          <div className="metric-badge-container">
+            <div className="metric-badge positive">+2%</div>
+            <span className="metric-comparison">So với kỳ trước</span>
           </div>
         </div>
 
@@ -305,12 +336,10 @@ export default function RevenueReportPage() {
             </div>
             <span className="metric-title">Tổng Sản Phẩm</span>
           </div>
-          <div className="metric-body">
-            <div className="metric-value green-text">145</div>
-            <div className="metric-badge-container">
-              <div className="metric-badge positive">+5%</div>
-              <span className="metric-comparison">So với kỳ trước</span>
-            </div>
+          <div className="metric-value green-text">145</div>
+          <div className="metric-badge-container">
+            <div className="metric-badge positive">+5%</div>
+            <span className="metric-comparison">So với kỳ trước</span>
           </div>
         </div>
       </div>
@@ -416,6 +445,7 @@ export default function RevenueReportPage() {
                 <th>Thời Gian</th>
                 <th>Nhân Viên</th>
                 <th>Loại Hình</th>
+                <th>PTTT</th>
                 <th>Tổng Tiền</th>
                 <th>Trạng Thái</th>
               </tr>
@@ -431,6 +461,7 @@ export default function RevenueReportPage() {
                       {o.type}
                     </span>
                   </td>
+                  <td>{o.paymentMethod}</td>
                   <td>{o.total}</td>
                   <td>
                     <span className="status-badge" style={{ backgroundColor: o.statusColor, color: o.statusTextColor }}>
