@@ -4,6 +4,10 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell
 } from 'recharts';
+import iconSale from '../../assets/icon/sale_darkgreen.png';
+import iconOrder from '../../assets/icon/order_red.png';
+import iconAverage from '../../assets/icon/average_darkgreen.png';
+import iconProduct from '../../assets/icon/total_product_darkgreen.png';
 import './RevenueReportPage.css';
 
 const revenueData = [
@@ -60,6 +64,11 @@ const typeData = [
   { name: 'Mang đi', value: 20, revenue: '850.000đ', orders: 21, color: '#68c83e' },
 ];
 
+const paymentData = [
+  { name: 'Tiền mặt', value: 35, revenue: '1.200.000đ', orders: 30, color: '#68c83e' },
+  { name: 'Chuyển khoản', value: 65, revenue: '3.050.000đ', orders: 55, color: '#2b7a0b' },
+];
+
 const topProducts = [
   { sku: 'SKU - HDNDKS', name: 'Trà Trái Cây Nhiệt Đới', category: 'Trà', revenue: '1.050.000đ', qty: '30 ly' },
   { sku: 'SKU - HDNDKS', name: 'Cà Phê Sữa', category: 'Cà Phê', revenue: '855.000đ', qty: '24 ly' },
@@ -103,16 +112,44 @@ const PieTooltip = ({ active, payload }: any) => {
   return null;
 };
 
-const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+const renderPieLabel = (props: any) => {
   const RADIAN = Math.PI / 180;
+  const { cx, cy, midAngle, innerRadius, outerRadius, fill, payload, percent } = props;
+  
+  // Percentage inside pie
   const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
   const x = cx + radius * Math.cos(-midAngle * RADIAN);
   const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
+  // Outer label coordinates
+  const sin = Math.sin(-RADIAN * midAngle);
+  const cos = Math.cos(-RADIAN * midAngle);
+  const sx = cx + (outerRadius + 5) * cos;
+  const sy = cy + (outerRadius + 5) * sin;
+  const mx = cx + (outerRadius + 15) * cos;
+  const my = cy + (outerRadius + 15) * sin;
+  const ex = mx + (cos >= 0 ? 1 : -1) * 20;
+  const ey = my;
+  const textAnchor = cos >= 0 ? 'start' : 'end';
+
   return (
-    <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={13} fontWeight="bold">
-      {`${(percent * 100).toFixed(0)}%`}
-    </text>
+    <g>
+      {/* Percentage inside pie */}
+      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={13} fontWeight="bold">
+        {`${(percent * 100).toFixed(0)}%`}
+      </text>
+
+      {/* Connecting line */}
+      <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} strokeWidth={1.5} fill="none" />
+      
+      {/* Outer label text */}
+      <text x={ex + (cos >= 0 ? 1 : -1) * 6} y={ey - 4} textAnchor={textAnchor} fill={fill} fontSize={14} fontWeight="bold">
+        {payload.name}
+      </text>
+      <text x={ex + (cos >= 0 ? 1 : -1) * 6} y={ey + 14} textAnchor={textAnchor} fill="#888" fontSize={12} fontWeight="500">
+        {`${payload.orders} đơn | ${payload.revenue}`}
+      </text>
+    </g>
   );
 };
 
@@ -290,7 +327,7 @@ export default function RevenueReportPage() {
         <div className="metric-card">
           <div className="metric-header">
             <div className="metric-icon-bg green-bg">
-              <span className="metric-icon">$</span>
+              <img src={iconSale} alt="Tổng Doanh Thu" className="metric-icon-img" />
             </div>
             <span className="metric-title">Tổng Doanh Thu</span>
           </div>
@@ -304,7 +341,7 @@ export default function RevenueReportPage() {
         <div className="metric-card">
           <div className="metric-header">
             <div className="metric-icon-bg red-bg">
-              <span className="metric-icon">📄</span>
+              <img src={iconOrder} alt="Tổng Đơn" className="metric-icon-img" />
             </div>
             <span className="metric-title">Tổng Đơn</span>
           </div>
@@ -318,7 +355,7 @@ export default function RevenueReportPage() {
         <div className="metric-card">
           <div className="metric-header">
             <div className="metric-icon-bg green-bg">
-              <span className="metric-icon">📈</span>
+              <img src={iconAverage} alt="Trung Bình Giá Trị Đơn" className="metric-icon-img" />
             </div>
             <span className="metric-title">Trung Bình Giá Trị Đơn</span>
           </div>
@@ -332,7 +369,7 @@ export default function RevenueReportPage() {
         <div className="metric-card">
           <div className="metric-header">
             <div className="metric-icon-bg green-bg">
-              <span className="metric-icon">📦</span>
+              <img src={iconProduct} alt="Tổng Sản Phẩm" className="metric-icon-img" />
             </div>
             <span className="metric-title">Tổng Sản Phẩm</span>
           </div>
@@ -348,7 +385,7 @@ export default function RevenueReportPage() {
       <div className="dashboard-section chart-section">
         <h2 className="section-title">Tổng Quan Doanh Thu</h2>
         <div className="chart-wrapper">
-          <ResponsiveContainer width="100%" height={250}>
+          <ResponsiveContainer width="99%" height={250}>
             <BarChart data={currentChartData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
               <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 12 }} dy={10} />
@@ -365,24 +402,24 @@ export default function RevenueReportPage() {
         </div>
       </div>
 
-      {/* Middle Row */}
-      <div className="middle-row">
+      {/* Row 1: 2 Pie Charts */}
+      <div className="dashboard-row pie-row">
         <div className="dashboard-section pie-section">
           <h2 className="section-title">Cơ Cấu Theo Loại</h2>
           <div className="pie-wrapper">
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
+            <ResponsiveContainer width="99%" height={250}>
+              <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <Pie
                   data={typeData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={45}
-                  outerRadius={90}
+                  innerRadius={40}
+                  outerRadius={75}
                   paddingAngle={2}
                   dataKey="value"
                   stroke="none"
                   labelLine={false}
-                  label={renderCustomizedLabel}
+                  label={renderPieLabel}
                 >
                   {typeData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
@@ -391,89 +428,108 @@ export default function RevenueReportPage() {
                 <Tooltip content={<PieTooltip />} />
               </PieChart>
             </ResponsiveContainer>
-            <div className="pie-legend">
-              {typeData.map(item => (
-                <div key={item.name} className="legend-item">
-                  <span className="legend-dot" style={{ backgroundColor: item.color }}></span>
-                  {item.name}
-                </div>
-              ))}
-            </div>
           </div>
         </div>
 
-        <div className="dashboard-section top-products-section">
-          <div className="section-header-row">
-            <h2 className="section-title">Doanh thu Sản phẩm</h2>
-            <button className="btn-sort"><ArrowDownUp size={14} /> Giảm dần</button>
-          </div>
-          <div className="table-responsive">
-            <table className="dashboard-table">
-              <thead>
-                <tr>
-                  <th>SKU</th>
-                  <th>Sản Phẩm</th>
-                  <th>Danh Mục</th>
-                  <th>Doanh Thu</th>
-                  <th>Số Lượng Bán</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topProducts.map((p, i) => (
-                  <tr key={i}>
-                    <td className="sku-text">{p.sku}</td>
-                    <td className="font-medium">{p.name}</td>
-                    <td>{p.category}</td>
-                    <td>{p.revenue}</td>
-                    <td>{p.qty}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="dashboard-section pie-section">
+          <h2 className="section-title">Cơ Cấu Theo Phương Thức Thanh Toán</h2>
+          <div className="pie-wrapper">
+            <ResponsiveContainer width="99%" height={250}>
+              <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                <Pie
+                  data={paymentData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={40}
+                  outerRadius={75}
+                  paddingAngle={2}
+                  dataKey="value"
+                  stroke="none"
+                  labelLine={false}
+                  label={renderPieLabel}
+                >
+                  {paymentData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip content={<PieTooltip />} />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </div>
 
-      {/* Bottom Row */}
-      <div className="dashboard-section order-list-section">
-        <h2 className="section-title">Danh Sách Đơn Hàng</h2>
+      {/* Row 2: Top Products */}
+      <div className="dashboard-section top-products-section">
+        <div className="section-header-row">
+          <h2 className="section-title">Doanh thu Sản phẩm</h2>
+          <button className="btn-sort"><ArrowDownUp size={14} /> Giảm dần</button>
+        </div>
         <div className="table-responsive">
-          <table className="dashboard-table full-table">
+          <table className="dashboard-table">
             <thead>
               <tr>
-                <th>Mã Đơn</th>
-                <th>Thời Gian</th>
-                <th>Nhân Viên</th>
-                <th>Loại Hình</th>
-                <th>PTTT</th>
-                <th>Tổng Tiền</th>
-                <th>Trạng Thái</th>
+                <th>SKU</th>
+                <th>Sản Phẩm</th>
+                <th>Danh Mục</th>
+                <th>Doanh Thu</th>
+                <th>Số Lượng Bán</th>
               </tr>
             </thead>
             <tbody>
-              {orderList.map((o, i) => (
+              {topProducts.map((p, i) => (
                 <tr key={i}>
-                  <td className="sku-text font-medium">{o.id}</td>
-                  <td>{o.time}</td>
-                  <td>{o.staff}</td>
-                  <td>
-                    <span className="type-badge" style={{ backgroundColor: o.typeColor, color: o.typeTextColor }}>
-                      {o.type}
-                    </span>
-                  </td>
-                  <td>{o.paymentMethod}</td>
-                  <td>{o.total}</td>
-                  <td>
-                    <span className="status-badge" style={{ backgroundColor: o.statusColor, color: o.statusTextColor }}>
-                      {o.status}
-                    </span>
-                  </td>
+                  <td className="sku-text">{p.sku}</td>
+                  <td className="font-medium">{p.name}</td>
+                  <td>{p.category}</td>
+                  <td>{p.revenue}</td>
+                  <td>{p.qty}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+
+        <div className="dashboard-section order-list-section">
+          <h2 className="section-title">Danh Sách Đơn Hàng</h2>
+          <div className="table-responsive">
+            <table className="dashboard-table full-table">
+              <thead>
+                <tr>
+                  <th>Mã Đơn</th>
+                  <th>Thời Gian</th>
+                  <th>Nhân Viên</th>
+                  <th>Loại Hình</th>
+                  <th>PTTT</th>
+                  <th>Tổng Tiền</th>
+                  <th>Trạng Thái</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orderList.map((o, i) => (
+                  <tr key={i}>
+                    <td className="sku-text font-medium">{o.id}</td>
+                    <td>{o.time}</td>
+                    <td>{o.staff}</td>
+                    <td>
+                      <span className="type-badge" style={{ backgroundColor: o.typeColor, color: o.typeTextColor }}>
+                        {o.type}
+                      </span>
+                    </td>
+                    <td>{o.paymentMethod}</td>
+                    <td>{o.total}</td>
+                    <td>
+                      <span className="status-badge" style={{ backgroundColor: o.statusColor, color: o.statusTextColor }}>
+                        {o.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       
     </div>
   );

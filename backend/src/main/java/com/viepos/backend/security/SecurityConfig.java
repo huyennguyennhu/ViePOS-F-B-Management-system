@@ -56,7 +56,11 @@ public class SecurityConfig {
             "http://localhost:*", 
             "http://127.0.0.1:*",
             "https://molten-gasket-434712-c8.web.app",
-            "https://*.web.app"
+            "https://*.web.app",
+            "https://vie-pos-f-b-management-system.vercel.app",
+            "https://*.vercel.app",
+            "https://console.cron-job.org",
+            "https://*.cron-job.org"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));

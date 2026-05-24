@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Store, FileText, User } from 'lucide-react';
+import { Home, ShoppingCart, User } from 'lucide-react';
+import iconShopFillWhite from '../../assets/icon/shop_fill_white.png';
 import './BottomNav.css';
 
 // Custom SVG Icon for Table (Bàn) based on the image
@@ -38,7 +39,7 @@ export default function BottomNav() {
 
       <NavLink to="/pos/sales" className={({ isActive }) => `bottom-nav-center-wrapper ${isActive ? 'active' : ''}`}>
         <div className="bottom-nav-center-circle">
-          <Store size={26} color="#fff" />
+          <img src={iconShopFillWhite} alt="Bán hàng" style={{ width: 24, height: 24, objectFit: 'contain' }} />
         </div>
         <span className="bottom-nav-center-text">Bán hàng</span>
       </NavLink>
@@ -47,8 +48,8 @@ export default function BottomNav() {
         {({ isActive }) => (
           <>
             {isActive && <div className="bottom-nav-indicator" />}
-            <FileText size={22} className="bottom-nav-icon" />
-            <span>Order</span>
+            <ShoppingCart size={22} className="bottom-nav-icon" />
+            <span>Đơn hàng</span>
           </>
         )}
       </NavLink>

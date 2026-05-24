@@ -1,6 +1,7 @@
-import { Camera, Edit2, Contact, User, Phone, Mail, Calendar, ChevronUp, ChevronDown, ChevronRight, RefreshCw, LogOut } from 'lucide-react';
+import { Camera, Contact, User, Phone, Mail, Calendar, ChevronUp, ChevronDown, ChevronRight, RefreshCw, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import iconEditGrey from '../../assets/icon/edit_grey.png';
 import './PosAccountPage.css';
 
 export default function PosAccountPage() {
@@ -8,13 +9,13 @@ export default function PosAccountPage() {
   const [isInfoExpanded, setIsInfoExpanded] = useState(false);
   const [isSecurityExpanded, setIsSecurityExpanded] = useState(false);
   
-  const staffName = localStorage.getItem('staffName') || 'Nguyễn Văn A';
-  const staffEmail = localStorage.getItem('staffEmail') || 'nguyenvana@gmail.com';
+  const staffName = localStorage.getItem('staffName') || 'Người dùng';
+  const staffEmail = localStorage.getItem('staffEmail') || 'Chưa cập nhật';
   // Translate role from ID/english to Vietnamese if needed, or just use as is
   const staffRole = localStorage.getItem('staffRole') || 'Nhân viên Thu ngân';
   const roleDisplay = staffRole.includes('admin') ? 'Quản lý' : 'Nhân viên Thu ngân';
   
-  const staffId = localStorage.getItem('staffId') || 'NV000123';
+  const staffId = localStorage.getItem('staffId') || '---';
   const staffPhone = localStorage.getItem('staffPhone') || 'Chưa cập nhật';
   const lastLoginTime = localStorage.getItem('lastLoginTime') || 'Chưa rõ';
   
@@ -45,12 +46,11 @@ export default function PosAccountPage() {
           <div className="profile-info">
             <div className="profile-name-row">
               <div className="profile-name">{staffName}</div>
-              <Edit2 size={14} color="#666" />
+              <img src={iconEditGrey} alt="Sửa" style={{ width: 14, height: 14, objectFit: 'contain' }} />
             </div>
             <div className="profile-id">ID: <span>{staffId.substring(0, 8)}</span></div>
             <div className="status-badge-wrapper">
               <div className="status-badge">
-                <div className="status-dot"></div>
                 Đang hoạt động
               </div>
             </div>

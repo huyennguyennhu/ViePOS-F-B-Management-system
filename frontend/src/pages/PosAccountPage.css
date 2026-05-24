@@ -94,14 +94,9 @@
   border-radius: 20px;
   font-size: 11px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
-.status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: #2e7d32;
-}
 
 .role-card {
   background-color: #edf5ea;

@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, Calculator, X, Minus, Plus, ChevronLeft, Edit2, Trash2, Camera } from 'lucide-react';
+import { Search, X, Minus, Plus, ChevronLeft, Trash2, Camera } from 'lucide-react';
 import { productAPI, cardAPI, orderAPI } from '../services/api';
 import arrowWhite from '../../assets/icon/arrow_white.png';
+import iconPosDarkgreen from '../../assets/icon/pos_darkgreen.png';
+import iconEditGrey from '../../assets/icon/edit_grey.png';
 import './PosSalesPage.css';
 
 interface Category {
@@ -679,17 +681,7 @@ export default function PosSalesPage() {
     return (words[0][0] + words[1][0]).toUpperCase();
   };
 
-  // Màu nền theo danh mục
-  const getCategoryColor = (categoryName: string) => {
-    const map: Record<string, string> = {
-      'Cà phê': '#795548',
-      'Trà sữa': '#ec407a',
-      'Nước ép': '#ff7043',
-      'Trà': '#4caf50',
-      'Ăn vặt': '#ffa726',
-    };
-    return map[categoryName] || '#349409';
-  };
+
 
   const tempTotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const discountAmount = (tempTotal * discountPercent) / 100;
@@ -710,7 +702,7 @@ export default function PosSalesPage() {
             onClick={() => cartItems.length > 0 && setIsCartOpen(true)} 
             style={{ cursor: cartItems.length > 0 ? 'pointer' : 'default' }}
           >
-            <Calculator size={24} color="#111" />
+            <img src={iconPosDarkgreen} alt="Cart" style={{ width: 20, height: 20, objectFit: 'contain' }} />
             {cartItems.length > 0 && (
               <span className="pos-badge">
                 {cartItems.reduce((sum, item) => sum + item.quantity, 0)}
@@ -771,7 +763,7 @@ export default function PosSalesPage() {
               >
                 <div 
                   className="pos-product-img"
-                  style={!product.imageUrl ? { backgroundColor: getCategoryColor(product.category.name) } : {}}
+                  style={!product.imageUrl ? { backgroundColor: 'rgba(192, 192, 192, 1)' } : {}}
                 >
                   {product.imageUrl ? (
                     <img src={product.imageUrl} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -805,7 +797,7 @@ export default function PosSalesPage() {
               <div className="pos-sheet-product-info">
                 <div 
                   className="pos-sheet-img"
-                  style={!selectedProduct.imageUrl ? { backgroundColor: getCategoryColor(selectedProduct.category.name) } : {}}
+                  style={!selectedProduct.imageUrl ? { backgroundColor: 'rgb(121, 85, 72)' } : {}}
                 >
                   {selectedProduct.imageUrl ? (
                     <img src={selectedProduct.imageUrl} alt={selectedProduct.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -929,7 +921,7 @@ export default function PosSalesPage() {
               <h2 className="pos-cart-title">Đơn hàng</h2>
               <div className="pos-cart-header-actions">
                 <button className="pos-cart-action-btn" onClick={handleOpenEditAll}>
-                  <Edit2 size={20} color="#555" />
+                  <img src={iconEditGrey} alt="Sửa" style={{ width: 20, height: 20, objectFit: 'contain' }} />
                 </button>
                 <button className="pos-cart-action-btn" onClick={handleClearCart}>
                   <X size={24} color="#d32f2f" />
@@ -949,7 +941,7 @@ export default function PosSalesPage() {
                         {item.product.imageUrl ? (
                           <img src={item.product.imageUrl} alt={item.product.name} />
                         ) : (
-                          <div style={{ backgroundColor: getCategoryColor(item.product.category.name), width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <div style={{ backgroundColor: 'rgb(121, 85, 72)', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <span className="pos-product-initials" style={{ fontSize: '20px' }}>{getInitials(item.product.name)}</span>
                           </div>
                         )}
@@ -959,7 +951,7 @@ export default function PosSalesPage() {
                         <div className="pos-cart-item-header">
                           <h4 className="pos-cart-item-name">{item.product.name}</h4>
                           <button className="pos-cart-item-edit-btn" onClick={() => handleEditCartItem(item)}>
-                            <Edit2 size={16} color="#777" />
+                            <img src={iconEditGrey} alt="Sửa" style={{ width: 16, height: 16, objectFit: 'contain' }} />
                           </button>
                         </div>
                         

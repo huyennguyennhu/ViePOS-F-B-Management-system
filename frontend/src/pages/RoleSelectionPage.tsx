@@ -1,7 +1,10 @@
 import { useNavigate } from 'react-router-dom';
-import { User, Users } from 'lucide-react';
+
 import './RoleSelectionPage.css';
-import heroImg from '../assets/hero.png';
+import heroImg from '../../assets/BG/image_1.png';
+import logoName from '../../assets/favicon/logoname.png';
+import loginManagerIcon from '../../assets/icon/login_manager.png';
+import loginEmployeeIcon from '../../assets/icon/login_employee.png';
 
 export default function RoleSelectionPage() {
   const navigate = useNavigate();
@@ -9,7 +12,7 @@ export default function RoleSelectionPage() {
   return (
     <div className="role-selection-container">
       <div className="role-logo-header">
-        <h2>ViePOS</h2>
+        <img src={logoName} alt="ViePOS" className="role-logo-img" />
         <span>xin chào!</span>
       </div>
       
@@ -27,7 +30,7 @@ export default function RoleSelectionPage() {
           className="role-btn" 
           onClick={() => navigate('/login/manager')}
         >
-          <User size={20} />
+          <img src={loginManagerIcon} alt="Quản Lý" className="role-btn-icon" />
           Quản Lý
         </button>
         
@@ -37,7 +40,7 @@ export default function RoleSelectionPage() {
           className="role-btn"
           onClick={() => navigate('/login/staff')}
         >
-          <Users size={20} />
+          <img src={loginEmployeeIcon} alt="Nhân Viên" className="role-btn-icon" />
           Nhân Viên
         </button>
       </div>

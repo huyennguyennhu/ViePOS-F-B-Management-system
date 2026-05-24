@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Search, FileSpreadsheet, FileText } from 'lucide-react';
+import { Search, FileText } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import iconExportExcel from '../../assets/icon/exportexcel_white.png';
 import './OrderManagementPage.css';
 
 interface OrderProduct {
@@ -210,7 +211,7 @@ export default function OrderManagementPage() {
       <div className="orders-page-header">
         <h1 className="orders-page-title">ĐƠN HÀNG</h1>
         <button className="btn-export-excel" onClick={() => setIsExportModalOpen(true)}>
-          Xuất Excel <FileSpreadsheet size={18} />
+          Xuất Excel <img src={iconExportExcel} alt="Export Excel" className="btn-icon-img" />
         </button>
       </div>
 
@@ -343,6 +344,7 @@ export default function OrderManagementPage() {
         </div>
 
         {/* Right Panel - Detail */}
+        {filteredOrders.length > 0 ? (
         <div className="order-detail-panel">
           <div className="order-detail-header">
             <div className="order-detail-title-wrapper">
@@ -477,6 +479,12 @@ export default function OrderManagementPage() {
             </div>
           </div>
         </div>
+        ) : (
+          <div className="order-detail-panel empty-detail">
+            <FileText size={64} className="empty-detail-icon" />
+            <p className="empty-detail-text">Không có đơn hàng nào để hiển thị chi tiết</p>
+          </div>
+        )}
 
       </div>
 

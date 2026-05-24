@@ -13,12 +13,10 @@
   margin-bottom: 1rem;
 }
 
-.role-logo-header h2 {
-  color: #2E5F2B;
-  font-size: 2.2rem;
-  margin: 0;
-  font-weight: 800;
-  letter-spacing: -1px;
+.role-logo-img {
+  height: 2.4rem;
+  width: auto;
+  object-fit: contain;
 }
 
 .role-logo-header span {
@@ -74,9 +72,16 @@
   background-color: #3CB018;
 }
 
-.role-btn svg {
+.role-btn svg,
+.role-btn-icon {
   position: absolute;
   left: 1.5rem;
+}
+
+.role-btn-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
 }
 
 .role-divider {
@@ -100,4 +105,10 @@
 
 .role-register a:hover {
   color: #2E5F2B;
+}
+
+@media (max-width: 768px) {
+  .role-subtitle {
+    font-size: 0.85rem;
+  }
 }

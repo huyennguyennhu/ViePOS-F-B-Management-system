@@ -1,6 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, BarChart2, ShoppingCart, Package, Users, Coffee, Tag, Settings, ChevronRight, ChevronDown, ChevronLeft } from 'lucide-react';
+import { ChevronRight, ChevronDown, ChevronLeft } from 'lucide-react';
+import iconHome      from '../../assets/icon/home.png';
+import iconReport    from '../../assets/icon/report_white.png';
+import iconOrder     from '../../assets/icon/order_white.png';
+import iconWarehouse from '../../assets/icon/warehouse.png';
+import iconProduct   from '../../assets/icon/product.png';
+import iconStaff     from '../../assets/icon/staff.png';
+import iconTable     from '../../assets/icon/table_white.png';
+import iconVoucher   from '../../assets/icon/voucher_white.png';
+import iconSetting   from '../../assets/icon/setting.png';
 import './Sidebar.css';
 
 export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSidebarOpen?: boolean, toggleSidebar?: () => void }) {
@@ -20,6 +29,14 @@ export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSid
   const [productsExpanded, setProductsExpanded] = useState(isProductsActive);
   const [inventoryExpanded, setInventoryExpanded] = useState(isInventoryActive);
   const [staffExpanded, setStaffExpanded] = useState(isStaffActive);
+
+  // Accordion: khi route thay đổi, chỉ xổ đúng tab cha, đóng những tab còn lại
+  useEffect(() => {
+    setReportsExpanded(isReportsActive);
+    setProductsExpanded(isProductsActive);
+    setInventoryExpanded(isInventoryActive);
+    setStaffExpanded(isStaffActive);
+  }, [location.pathname]);
 
   const navigateTo = (path: string, section?: 'reports' | 'products' | 'inventory' | 'staff') => {
     navigate(path);
@@ -58,13 +75,13 @@ export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSid
         
         <div className="nav-group">
           <div className={`nav-item ${isActive('/dashboard', true) || isActive('/dashboard/overview') ? 'active' : ''}`} onClick={() => navigateTo('/dashboard')}>
-            <div className="nav-item-left"><Home size={18} /> <span className="nav-label">Tổng quan</span></div>
+            <div className="nav-item-left"><img src={iconHome} alt="Tổng quan" className="sidebar-nav-icon" /> <span className="nav-label">Tổng quan</span></div>
           </div>
         </div>
 
         <div className="nav-group">
           <div className={`nav-item ${isReportsActive ? 'active' : ''}`} onClick={(e) => toggleMenu(e, setReportsExpanded, reportsExpanded)}>
-            <div className="nav-item-left"><BarChart2 size={18} /> <span className="nav-label">Báo cáo</span></div>
+            <div className="nav-item-left"><img src={iconReport} alt="Báo cáo" className="sidebar-nav-icon" /> <span className="nav-label">Báo cáo</span></div>
             {(reportsExpanded && isSidebarOpen) ? <ChevronDown size={16} className="nav-chevron" /> : <ChevronRight size={16} className="nav-chevron" />}
           </div>
           
@@ -89,13 +106,13 @@ export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSid
 
         <div className="nav-group">
           <div className={`nav-item ${isActive('/dashboard/orders') ? 'active' : ''}`} onClick={() => navigateTo('/dashboard/orders')}>
-            <div className="nav-item-left"><ShoppingCart size={18} /> <span className="nav-label">Đơn hàng</span></div>
+            <div className="nav-item-left"><img src={iconOrder} alt="Đơn hàng" className="sidebar-nav-icon" /> <span className="nav-label">Đơn hàng</span></div>
           </div>
         </div>
 
         <div className="nav-group">
           <div className={`nav-item ${isProductsActive ? 'active' : ''}`} onClick={(e) => toggleMenu(e, setProductsExpanded, productsExpanded)}>
-            <div className="nav-item-left"><Package size={18} /> <span className="nav-label">Sản phẩm</span></div>
+            <div className="nav-item-left"><img src={iconProduct} alt="Sản phẩm" className="sidebar-nav-icon" /> <span className="nav-label">Sản phẩm</span></div>
             {(productsExpanded && isSidebarOpen) ? <ChevronDown size={16} className="nav-chevron" /> : <ChevronRight size={16} className="nav-chevron" />}
           </div>
           
@@ -116,7 +133,7 @@ export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSid
 
         <div className="nav-group">
           <div className={`nav-item ${isInventoryActive ? 'active' : ''}`} onClick={(e) => toggleMenu(e, setInventoryExpanded, inventoryExpanded)}>
-            <div className="nav-item-left"><Package size={18} /> <span className="nav-label">Kho hàng</span></div>
+            <div className="nav-item-left"><img src={iconWarehouse} alt="Kho hàng" className="sidebar-nav-icon" /> <span className="nav-label">Kho hàng</span></div>
             {(inventoryExpanded && isSidebarOpen) ? <ChevronDown size={16} className="nav-chevron" /> : <ChevronRight size={16} className="nav-chevron" />}
           </div>
           
@@ -137,7 +154,7 @@ export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSid
 
         <div className="nav-group">
           <div className={`nav-item ${isStaffActive ? 'active' : ''}`} onClick={(e) => toggleMenu(e, setStaffExpanded, staffExpanded)}>
-            <div className="nav-item-left"><Users size={18} /> <span className="nav-label">Nhân viên</span></div>
+            <div className="nav-item-left"><img src={iconStaff} alt="Nhân viên" className="sidebar-nav-icon" /> <span className="nav-label">Nhân viên</span></div>
             {(staffExpanded && isSidebarOpen) ? <ChevronDown size={16} className="nav-chevron" /> : <ChevronRight size={16} className="nav-chevron" />}
           </div>
           
@@ -162,13 +179,13 @@ export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSid
 
         <div className="nav-group">
           <div className={`nav-item ${isActive('/dashboard/tables') ? 'active' : ''}`} onClick={() => navigateTo('/dashboard/tables')}>
-            <div className="nav-item-left"><Coffee size={18} /> <span className="nav-label">Bàn</span></div>
+            <div className="nav-item-left"><img src={iconTable} alt="Bàn" className="sidebar-nav-icon" /> <span className="nav-label">Bàn</span></div>
           </div>
         </div>
 
         <div className="nav-group">
           <div className={`nav-item ${isActive('/dashboard/promotions') ? 'active' : ''}`} onClick={() => navigateTo('/dashboard/promotions')}>
-            <div className="nav-item-left"><Tag size={18} /> <span className="nav-label">Khuyến mãi</span></div>
+            <div className="nav-item-left"><img src={iconVoucher} alt="Khuyến mãi" className="sidebar-nav-icon" /> <span className="nav-label">Khuyến mãi</span></div>
           </div>
         </div>
       </div>
@@ -176,7 +193,7 @@ export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSid
       <div className="sidebar-footer">
         <div className="nav-group">
           <div className={`nav-item ${isActive('/dashboard/settings') ? 'active' : ''}`} onClick={() => navigateTo('/dashboard/settings')}>
-            <div className="nav-item-left"><Settings size={18} /> <span className="nav-label">Thiết lập</span></div>
+            <div className="nav-item-left"><img src={iconSetting} alt="Thiết lập" className="sidebar-nav-icon" /> <span className="nav-label">Thiết lập</span></div>
           </div>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { useLocation } from 'react-router-dom';
+import { ShieldCheck } from 'lucide-react';
 import './DashboardPage.css';
 
 const featureNames: Record<string, string> = {
@@ -20,14 +21,14 @@ const featureNames: Record<string, string> = {
 
 export default function DashboardPage() {
   const location = useLocation();
-  const featureName = featureNames[location.pathname] || 'Tính năng này';
+  const featureName = featureNames[location.pathname] || 'này';
 
   return (
-    <div className="report-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-      <div style={{ textAlign: 'center', padding: '60px', backgroundColor: 'white', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-        <h2 style={{ color: '#256E05', marginBottom: '16px', fontSize: '1.8rem' }}>Tính năng {featureName}</h2>
-        <p style={{ color: '#666', fontSize: '1.2rem' }}>Đang trong quá trình phát triển nhé 🚀</p>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '60px', backgroundColor: 'transparent' }}>
+      <ShieldCheck size={64} strokeWidth={1.5} color="#e2e8f0" style={{ marginBottom: '24px' }} />
+      <p style={{ color: '#8898aa', fontSize: '1.2rem', fontStyle: 'italic', margin: 0 }}>
+        Tính năng {featureName} đang được phát triển và sẽ sớm ra mắt.
+      </p>
     </div>
   );
 }

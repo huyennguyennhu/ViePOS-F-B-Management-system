@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { X, EyeOff } from 'lucide-react';
 import api from '../services/api';
+import xGreyIcon from '../../assets/icon/x_grey.png';
+import closeEyeIcon from '../../assets/icon/close_eye_grey.png';
+import openEyeIcon from '../../assets/icon/open_eye_grey.png';
 import './LoginPage.css';
 
 export default function LoginPage() {
@@ -10,6 +12,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -18,6 +21,9 @@ export default function LoginPage() {
     try {
       const res = await api.post('/api/auth/login', { email, password });
       localStorage.setItem('token', res.data.token);
+      localStorage.setItem('role', res.data.role ?? 'MANAGER');
+      localStorage.setItem('staffEmail', email);
+      if (res.data.name) localStorage.setItem('staffName', res.data.name);
       navigate('/dashboard');
     } catch {
       setError('Email hoặc mật khẩu không đúng.');
@@ -28,9 +34,7 @@ export default function LoginPage() {
 
   return (
     <div className="login-inner-container">
-      <div className="login-header">
-        <h2>ViePOS</h2>
-      </div>
+
 
       <h3 className="login-title">Đăng Nhập - Quản Lý</h3>
 
@@ -47,10 +51,11 @@ export default function LoginPage() {
               required
             />
             {email && (
-              <X 
-                size={18} 
-                className="input-icon-right" 
-                onClick={() => setEmail('')} 
+            <img
+                src={xGreyIcon}
+                alt="Xoá"
+                className="input-icon-right"
+                onClick={() => setEmail('')}
               />
             )}
           </div>
@@ -61,13 +66,18 @@ export default function LoginPage() {
           <div className="input-wrapper">
             <input
               id="password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
             />
-            <EyeOff size={18} className="input-icon-right" />
+            <img
+              src={showPassword ? openEyeIcon : closeEyeIcon}
+              alt={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+              className="input-icon-right"
+              onClick={() => setShowPassword(prev => !prev)}
+            />
           </div>
         </div>
 

@@ -71,8 +71,14 @@
 .input-icon-right {
   position: absolute;
   right: 1rem;
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
   color: #888;
   cursor: pointer;
+  z-index: 2;
+  pointer-events: all;
+  user-select: none;
 }
 
 .login-error {
