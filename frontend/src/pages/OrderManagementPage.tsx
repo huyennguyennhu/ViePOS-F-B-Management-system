@@ -61,9 +61,25 @@ function mapOrderFromApi(raw: Record<string, unknown>): Order {
       }))
     : [];
 
+  const statusRaw = String(raw.status ?? "COMPLETED");
+  const status: Order["status"] =
+    statusRaw === "CANCELLED" ? "CANCELLED" : "COMPLETED";
+
   return {
-    ...(raw as Order),
     id: String(raw.id ?? ""),
+    orderCode: String(raw.orderCode ?? ""),
+    createdAt: String(raw.createdAt ?? ""),
+    completedAt: raw.completedAt != null ? String(raw.completedAt) : undefined,
+    employeeId: raw.employeeId != null ? String(raw.employeeId) : undefined,
+    employeeName: raw.employeeName != null ? String(raw.employeeName) : undefined,
+    sessionType: raw.sessionType != null ? String(raw.sessionType) : undefined,
+    totalAmount: Number(raw.totalAmount ?? 0),
+    subtotalAmount: Number(raw.subtotalAmount ?? 0),
+    discountAmount: Number(raw.discountAmount ?? 0),
+    status,
+    note: raw.note != null ? String(raw.note) : undefined,
+    paymentMethod: raw.paymentMethod != null ? String(raw.paymentMethod) : undefined,
+    paymentAmount: raw.paymentAmount != null ? Number(raw.paymentAmount) : undefined,
     transferProofImageUrl: proof,
     transfer_proof_image_url: proof,
     hasTransferProof: Boolean(raw.hasTransferProof) || Boolean(proof),

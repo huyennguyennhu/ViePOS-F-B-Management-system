@@ -4,19 +4,6 @@ import api from '../services/api';
 import { showToast } from '../components/Toast';
 import './ProductListPage.css';
 
-const mockProducts = [
-  { id: 1, name: 'Cà phê sữa', sku: 'SKU - BJBMSH', category: 'Cà phê', status: 'Đang bán',
-    editHistory: [
-      { time: '19:20:50 19/05/2026', user: 'Nguyễn Văn A', changes: 'Trạng thái' },
-      { time: '07:12:05 21/04/2024', user: 'Nguyễn Thị B', changes: 'Trạng thái, Tên sản phẩm' }
-    ]
-  },
-  { id: 2, name: 'Cà phê đen', sku: 'SKU - CPHDEN', category: 'Cà phê', status: 'Ngừng bán', editHistory: [] },
-  { id: 3, name: 'Trà đào cam sả', sku: 'SKU - TRADAO', category: 'Trà', status: 'Đang bán', editHistory: [] },
-
-  { id: 4, name: 'Bánh mì thịt', sku: 'SKU - BMITHI', category: 'Đồ ăn', status: 'Đang bán', editHistory: [] },
-];
-
 const categoryPrices: Record<string, { takeaway: string, h4: string, allday: string }> = {
   'Cà phê': { takeaway: '25.000', h4: '35.000', allday: '45.000' },
   'Trà': { takeaway: '30.000', h4: '40.000', allday: '50.000' },
@@ -25,7 +12,7 @@ const categoryPrices: Record<string, { takeaway: string, h4: string, allday: str
 
 export default function ProductListPage() {
   const [products, setProducts] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');

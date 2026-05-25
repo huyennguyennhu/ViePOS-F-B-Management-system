@@ -4,62 +4,9 @@ import api from '../services/api';
 import { showToast } from '../components/Toast';
 import './CategoryListPage.css';
 
-const mockCategories = [
-  {
-    id: 1, 
-    name: 'CÀ PHÊ', 
-    count: 5,
-    priceTakeaway: '25.000', price4H: '35.000', priceAllDay: '45.000',
-    lastUpdated: '14:45 19/05/2026', updatedBy: 'Nguyễn Văn A',
-    products: ['Cà Phê Đen Đá', 'Cà Phê Sữa', 'Cà Phê Muối', 'Cà Phê Bạc Xỉu', 'Cold Brew']
-  },
-  {
-    id: 2, 
-    name: 'TRÀ', 
-    count: 7,
-    priceTakeaway: '30.000', price4H: '40.000', priceAllDay: '50.000',
-    lastUpdated: '09:20 18/05/2026', updatedBy: 'Trần Thị B',
-    products: ['Trà Đào', 'Trà Vải', 'Trà Lài', 'Trà Bí Đao', 'Trà Đen', 'Trà Xanh', 'Trà Gừng']
-  },
-  { 
-    id: 3, 
-    name: 'NƯỚC ÉP', 
-    count: 2, 
-    priceTakeaway: '35.000', price4H: '45.000', priceAllDay: '55.000',
-    lastUpdated: '16:10 17/05/2026', updatedBy: 'Lê Văn C',
-    products: ['Nước Ép Cam', 'Nước Ép Táo'] 
-  },
-  { 
-    id: 4, 
-    name: 'TRÀ SỮA', 
-    count: 3, 
-    priceTakeaway: '25.000', price4H: '35.000', priceAllDay: '45.000',
-    lastUpdated: '11:05 16/05/2026', updatedBy: 'Nguyễn Văn A',
-    products: ['Trà Sữa Trân Châu', 'Trà Sữa Thái Xanh', 'Trà Sữa Thái Đỏ'] 
-  },
-  { 
-    id: 5, name: 'BÁNH NGỌT', count: 4, 
-    priceTakeaway: '30.000', price4H: '30.000', priceAllDay: '30.000',
-    lastUpdated: '10:00 21/05/2026', updatedBy: 'Trần Thị B',
-    products: ['Tiramisu', 'Mousse', 'Cheesecake'] 
-  },
-  { 
-    id: 6, name: 'SNACK', count: 5, 
-    priceTakeaway: '15.000', price4H: '15.000', priceAllDay: '15.000',
-    lastUpdated: '08:30 22/05/2026', updatedBy: 'Lê Văn C',
-    products: ['Hạt Hướng Dương', 'Khô Gà', 'Đậu Phộng'] 
-  },
-  { 
-    id: 7, name: 'NƯỚC NGỌT', count: 6, 
-    priceTakeaway: '20.000', price4H: '25.000', priceAllDay: '30.000',
-    lastUpdated: '07:15 23/05/2026', updatedBy: 'Hệ Thống',
-    products: ['Coca Cola', 'Pepsi', 'Sprite', '7Up'] 
-  }
-];
-
 export default function CategoryListPage() {
   const [categories, setCategories] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCats, setExpandedCats] = useState<number[]>([]);
 
@@ -316,7 +263,7 @@ export default function CategoryListPage() {
               
               {isExpanded && (
                 <ul className="category-product-list">
-                  {category.products.map((product, index) => (
+                  {category.products.map((product: string, index: number) => (
                     <li key={index} className="category-product-item">
                       {product}
                     </li>

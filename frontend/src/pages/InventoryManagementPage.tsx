@@ -143,7 +143,7 @@ export default function InventoryManagementPage() {
   const [statusFilter, setStatusFilter] = useState('Tất cả trạng thái kho');
 
   const [inventoryData, setInventoryData] = useState<InventoryProduct[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [, setIsLoading] = useState(false);
 
   useEffect(() => {
     fetchProducts();
