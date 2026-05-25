@@ -40,6 +40,7 @@ interface Order {
   note?: string;
   paymentMethod?: string;
   paymentAmount?: number;
+  cashReceived?: number;
   /** URL/base64 — chỉ có sau khi gọi GET /api/orders/{id} */
   transferProofImageUrl?: string;
   transfer_proof_image_url?: string;
@@ -87,6 +88,7 @@ function mapOrderFromApi(raw: Record<string, unknown>): Order {
     note: raw.note != null ? String(raw.note) : undefined,
     paymentMethod: raw.paymentMethod != null ? String(raw.paymentMethod) : undefined,
     paymentAmount: raw.paymentAmount != null ? Number(raw.paymentAmount) : undefined,
+    cashReceived: raw.cashReceived != null ? Number(raw.cashReceived) : undefined,
     transferProofImageUrl: proof,
     transfer_proof_image_url: proof,
     hasTransferProof: Boolean(raw.hasTransferProof) || Boolean(proof),
