@@ -1300,6 +1300,16 @@
   color: #349409;
 }
 
+/* Locked/pre-selected card state (disabled + active) */
+.pos-card-selection-btn.active:disabled {
+  background-color: #fff0f0;
+  border: 2px solid #C42326;
+  color: #C42326;
+  cursor: default;
+  box-shadow: 0 0 0 3px rgba(196, 35, 38, 0.15);
+  opacity: 1;
+}
+
 .pos-card-selection-footer {
   padding: 16px 20px;
   background-color: white;

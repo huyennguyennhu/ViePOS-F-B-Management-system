@@ -1,291 +1,539 @@
-import { useState } from 'react';
-import { Search, FileText } from 'lucide-react';
-import * as XLSX from 'xlsx';
-import iconExportExcel from '../../assets/icon/exportexcel_white.png';
-import './OrderManagementPage.css';
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Search, FileText, X } from "lucide-react";
+import { showToast } from "../components/Toast";
+import * as XLSX from "xlsx";
+import { orderAPI, staffAPI, unwrapOrdersList } from "../services/api";
+import iconExportExcel from "../../assets/icon/exportexcel_white.png";
+import "./OrderManagementPage.css";
 
 interface OrderProduct {
   id: string;
-  name: string;
-  description: string;
-  price: number;
+  productName: string;
+  productSku: string;
+  categoryName: string;
+  serviceType: string;
+  unitPrice: number;
   quantity: number;
-  total: number;
+  lineTotal: number;
+  note?: string;
 }
 
 interface Order {
   id: string;
-  date: string;
-  timeIn: string;
-  timeOut: string;
-  employee: string;
+  orderCode: string;
+  createdAt: string;
+  completedAt?: string;
+  employeeId?: string;
+  employeeName?: string;
+  sessionType?: string;
   totalAmount: number;
-  status: 'Hoàn tất' | 'Đã hủy';
-  reason?: string;
-  customerPaid: number;
-  change: number;
-  paymentMethod?: 'Tiền mặt' | 'Chuyển khoản';
-  products: OrderProduct[];
+  subtotalAmount: number;
+  discountAmount: number;
+  status: "COMPLETED" | "CANCELLED";
+  note?: string;
+  paymentMethod?: string;
+  paymentAmount?: number;
+  /** URL/base64 — chỉ có sau khi gọi GET /api/orders/{id} */
+  transferProofImageUrl?: string;
+  transfer_proof_image_url?: string;
+  /** Danh sách chỉ có ở API chi tiết */
+  hasTransferProof?: boolean;
+  items: OrderProduct[];
 }
 
-// Mock Data matching the screenshot
-const MOCK_ORDERS: Order[] = [
-  {
-    id: 'ORD023_1', // Using unique IDs for react keys even if display IDs repeat
-    date: '19/05/2026',
-    timeIn: '14:20:56',
-    timeOut: '14:45:00',
-    employee: 'Nguyễn Văn A',
-    totalAmount: 70000,
-    status: 'Hoàn tất',
-    customerPaid: 70000,
-    change: 0,
-    paymentMethod: 'Chuyển khoản',
-    products: [
-      { id: 'p1', name: 'Trà Đào', description: 'Tại chỗ 4 giờ', price: 35000, quantity: 1, total: 35000 },
-      { id: 'p2', name: 'Trà Trái Cây', description: 'Tại chỗ 4 giờ', price: 35000, quantity: 1, total: 35000 },
-    ]
-  },
-  {
-    id: 'ORD022',
-    date: '19/05/2026',
-    timeIn: '14:20:56',
-    timeOut: '--',
-    employee: 'Nguyễn Văn A',
-    totalAmount: 35000,
-    status: 'Đã hủy',
-    reason: 'Nhân viên đặt nhầm món',
-    customerPaid: 0,
-    change: 0,
-    products: [
-      { id: 'p3', name: 'Trà Đào', description: 'Tại chỗ 4 giờ', price: 35000, quantity: 1, total: 35000 }
-    ]
-  },
-  {
-    id: 'ORD023_2',
-    date: '19/05/2026',
-    timeIn: '14:20:56',
-    timeOut: '14:30:00',
-    employee: 'Nguyễn Văn A',
-    totalAmount: 25000,
-    status: 'Hoàn tất',
-    customerPaid: 150000,
-    change: 45000,
-    paymentMethod: 'Tiền mặt',
-    products: [
-      { id: 'p4', name: 'Cà phê đen', description: 'Mang đi', price: 25000, quantity: 1, total: 25000 }
-    ]
-  },
-  {
-    id: 'ORD023_3',
-    date: '19/05/2026',
-    timeIn: '14:20:56',
-    timeOut: '15:10:00',
-    employee: 'Nguyễn Văn A',
-    totalAmount: 105000,
-    status: 'Hoàn tất',
-    customerPaid: 105000,
-    change: 0,
-    paymentMethod: 'Chuyển khoản',
-    products: [
-      { id: 'p5', name: 'Trà sữa trân châu', description: 'Tại chỗ', price: 35000, quantity: 3, total: 105000 }
-    ]
-  }
-];
+function mapOrderFromApi(raw: Record<string, unknown>): Order {
+  const proof =
+    (typeof raw.transfer_proof_image_url === 'string' && raw.transfer_proof_image_url.trim()) ||
+    (typeof raw.transferProofImageUrl === 'string' && raw.transferProofImageUrl.trim()) ||
+    undefined;
+  const itemsRaw = raw.items;
+  const items = Array.isArray(itemsRaw)
+    ? (itemsRaw as Record<string, unknown>[]).map((it) => ({
+        id: String(it.id ?? ""),
+        productName: String(it.productName ?? ""),
+        productSku: String(it.productSku ?? ""),
+        categoryName: String(it.categoryName ?? ""),
+        serviceType: String(it.serviceType ?? ""),
+        unitPrice: Number(it.unitPrice ?? 0),
+        quantity: Number(it.quantity ?? 0),
+        lineTotal: Number(it.lineTotal ?? 0),
+        note: it.note != null ? String(it.note) : undefined,
+      }))
+    : [];
+
+  return {
+    ...(raw as Order),
+    id: String(raw.id ?? ""),
+    transferProofImageUrl: proof,
+    transfer_proof_image_url: proof,
+    hasTransferProof: Boolean(raw.hasTransferProof) || Boolean(proof),
+    items,
+  };
+}
+
+const SERVICE_TYPE_LABEL: Record<string, string> = {
+  TAKEAWAY: "Mang đi",
+  FOUR_HOURS: "Tại chỗ 4H",
+  FULL_DAY: "Tại chỗ cả ngày",
+  PACKAGE_4H: "Tại chỗ 4H",
+  FULLTIME: "Tại chỗ cả ngày",
+};
+
+const PAYMENT_LABEL: Record<string, string> = {
+  CASH: "Tiền mặt",
+  BANK_TRANSFER: "Chuyển khoản",
+};
+
+function TransferProofViewIcon() {
+  return (
+    <svg
+      className="transfer-proof-view-icon"
+      width="20"
+      height="20"
+      viewBox="0 0 36 36"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <path
+        d="M8 4H4V8"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M28 4H32V8"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M4 28V32H8"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M32 28V32H28"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+      <line
+        x1="11"
+        y1="13"
+        x2="25"
+        y2="13"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+      <line
+        x1="11"
+        y1="18"
+        x2="21"
+        y2="18"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+      <line
+        x1="11"
+        y1="23"
+        x2="25"
+        y2="23"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 
 export default function OrderManagementPage() {
-  const today = new Date().toISOString().split('T')[0];
-  const [searchTerm, setSearchTerm] = useState('');
+  const today = new Date().toISOString().split("T")[0];
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [staffList, setStaffList] = useState<{ id: string; name: string }[]>(
+    []
+  );
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const hasOrdersLoadedRef = useRef(false);
+
+  const [searchTerm, setSearchTerm] = useState("");
   const [fromDate, setFromDate] = useState(today);
   const [toDate, setToDate] = useState(today);
-  const [employeeFilter, setEmployeeFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [selectedOrderId, setSelectedOrderId] = useState<string>(MOCK_ORDERS[0].id);
-  
-  // States for the detail panel form
-  const [currentStatus, setCurrentStatus] = useState<'Hoàn tất' | 'Đã hủy'>(MOCK_ORDERS[0].status);
-  const [currentReason, setCurrentReason] = useState(MOCK_ORDERS[0].reason || '');
-  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [employeeFilter, setEmployeeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
 
-  const selectedOrder = MOCK_ORDERS.find(o => o.id === selectedOrderId) || MOCK_ORDERS[0];
-  const isEditable = selectedOrder.status === 'Hoàn tất';
-  const isSaveDisabled = 
-    (currentStatus === selectedOrder.status && currentReason === (selectedOrder.reason || '')) ||
-    (currentStatus === 'Đã hủy' && currentReason.trim() === '');
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [orderDetail, setOrderDetail] = useState<Order | null>(null);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [currentNote, setCurrentNote] = useState("");
+  const [currentStatus, setCurrentStatus] = useState<"COMPLETED" | "CANCELLED">(
+    "COMPLETED"
+  );
+  const [isSaving, setIsSaving] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isTransferProofOpen, setIsTransferProofOpen] = useState(false);
+
+  const fetchOrders = useCallback(
+    async (options?: { silent?: boolean }) => {
+      const silent = options?.silent ?? hasOrdersLoadedRef.current;
+      if (!silent) setIsInitialLoading(true);
+      setIsRefreshing(true);
+      try {
+        const params: Record<string, string | number> = {
+          fromDate,
+          toDate,
+          page: 0,
+          size: 500,
+        };
+        if (statusFilter !== "all") params.status = statusFilter;
+        if (employeeFilter !== "all") params.employeeId = employeeFilter;
+        const res = await orderAPI.getOrders(params);
+        const list = unwrapOrdersList(res.data).map((row) =>
+          mapOrderFromApi(row)
+        );
+        setOrders(list);
+        hasOrdersLoadedRef.current = list.length > 0;
+        setSelectedOrderId((prevId) => {
+          const nextId =
+            prevId && list.some((o) => o.id === prevId)
+              ? prevId
+              : list.length > 0
+                ? list[0].id
+                : null;
+          if (nextId) {
+            const order = list.find((o) => o.id === nextId);
+            if (order) {
+              setCurrentStatus(order.status);
+              setCurrentNote(order.note || "");
+            }
+          }
+          return nextId;
+        });
+      } catch (err) {
+        console.error("Error fetching orders:", err);
+      } finally {
+        setIsInitialLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [fromDate, toDate, statusFilter, employeeFilter]
+  );
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  useEffect(() => {
+    staffAPI
+      .getAll()
+      .then((res) => {
+        const mapped = res.data.map((s: any) => ({
+          id: s.employeeId || s.id,
+          name: s.name || s.fullName,
+        }));
+        setStaffList(mapped);
+      })
+      .catch(() => {});
+  }, []);
+
+  const filteredOrders = orders.filter((order) => {
+    const matchSearch =
+      order.orderCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (order.employeeName || "")
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
+    return matchSearch;
+  });
+
+  const listSelected =
+    orders.find((o) => o.id === selectedOrderId) ||
+    filteredOrders.find((o) => o.id === selectedOrderId) ||
+    filteredOrders[0] ||
+    null;
+
+  const selectedOrder =
+    orderDetail && orderDetail.id === selectedOrderId
+      ? orderDetail
+      : listSelected;
+
+  const fetchOrderDetail = useCallback(async (orderId: string) => {
+    setIsDetailLoading(true);
+    try {
+      const res = await orderAPI.getOrderById(orderId, { includeTransferProof: true });
+      setOrderDetail(mapOrderFromApi(res.data as Record<string, unknown>));
+    } catch (err) {
+      console.error("Error fetching order detail:", err);
+      setOrderDetail(null);
+    } finally {
+      setIsDetailLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedOrderId) {
+      fetchOrderDetail(selectedOrderId);
+    } else {
+      setOrderDetail(null);
+    }
+  }, [selectedOrderId, fetchOrderDetail]);
 
   const handleSelectOrder = (order: Order) => {
     setSelectedOrderId(order.id);
     setCurrentStatus(order.status);
-    setCurrentReason(order.reason || '');
+    setCurrentNote(order.note || "");
+    setIsTransferProofOpen(false);
+    setOrderDetail(null);
   };
 
-  const hasFiltersChanged = 
-    searchTerm !== '' || 
-    fromDate !== today || 
-    toDate !== today || 
-    employeeFilter !== 'all' || 
-    statusFilter !== 'all';
+  const isBankTransfer = (method?: string) =>
+    method === "BANK_TRANSFER" || method === "Chuyển khoản";
+
+  const isEditable = selectedOrder?.status === "COMPLETED";
+  const isSaveDisabled =
+    !selectedOrder ||
+    (currentStatus === selectedOrder.status &&
+      currentNote === (selectedOrder.note || "")) ||
+    (currentStatus === "CANCELLED" && currentNote.trim() === "");
+
+  const handleSave = async () => {
+    if (!selectedOrder || isSaveDisabled) return;
+    const orderId = String(selectedOrder.id);
+    setIsSaving(true);
+    try {
+      const res = await orderAPI.updateStatus(orderId, currentStatus, currentNote);
+      const savedStatus = (res.data?.status ?? currentStatus) as Order["status"];
+      const savedNote = res.data?.note ?? currentNote;
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === selectedOrder.id
+            ? { ...o, status: savedStatus, note: savedNote || undefined }
+            : o
+        )
+      );
+      setCurrentStatus(savedStatus);
+      setCurrentNote(savedNote || "");
+      showToast("Đã lưu trạng thái đơn hàng");
+      await fetchOrders({ silent: true });
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || "Không thể lưu trạng thái đơn hàng";
+      showToast(msg, "error");
+      console.error(err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const hasFiltersChanged =
+    searchTerm !== "" ||
+    fromDate !== today ||
+    toDate !== today ||
+    employeeFilter !== "all" ||
+    statusFilter !== "all";
 
   const handleClearFilters = () => {
-    setSearchTerm('');
+    setSearchTerm("");
     setFromDate(today);
     setToDate(today);
-    setEmployeeFilter('all');
-    setStatusFilter('all');
+    setEmployeeFilter("all");
+    setStatusFilter("all");
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('vi-VN').format(amount) + 'đ';
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("vi-VN").format(amount) + "đ";
+
+  const formatDateTime = (isoStr: string) => {
+    if (!isoStr) return "--";
+    const d = new Date(isoStr);
+    const date = d.toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+    const time = d.toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+    return { date, time };
   };
 
   const formatDateDisplay = (dateString: string) => {
-    const [y, m, d] = dateString.split('-');
+    const [y, m, d] = dateString.split("-");
     return `${d}/${m}/${y}`;
   };
 
-  const parseDate = (dateStr: string) => {
-    const [d, m, y] = dateStr.split('/');
-    return new Date(`${y}-${m}-${d}`);
+  const slugForFileName = (text: string, maxLen = 24) =>
+    text
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/gi, "d")
+      .replace(/[^a-zA-Z0-9]+/g, "_")
+      .replace(/^_|_$/g, "")
+      .slice(0, maxLen);
+
+  /** Tên file .xlsx theo bộ lọc hiện tại (ASCII, an toàn trên Windows). */
+  const buildExportFileName = (orderCount: number) => {
+    const from = fromDate.replace(/-/g, "");
+    const to = toDate.replace(/-/g, "");
+    const range = from === to ? from : `${from}-${to}`;
+
+    const statusPart =
+      statusFilter === "all"
+        ? "TatCa"
+        : statusFilter === "COMPLETED"
+          ? "HoanTat"
+          : "DaHuy";
+
+    const parts = ["DonHang", range, statusPart];
+
+    if (employeeFilter !== "all") {
+      const staff = staffList.find((s) => s.id === employeeFilter);
+      if (staff?.name) {
+        const slug = slugForFileName(staff.name);
+        if (slug) parts.push(slug);
+      }
+    }
+
+    if (searchTerm.trim()) {
+      const q = slugForFileName(searchTerm.trim(), 16);
+      if (q) parts.push(`TK_${q}`);
+    }
+
+    parts.push(`${orderCount}don`);
+    return `${parts.join("_")}.xlsx`;
   };
 
-  const filteredOrders = MOCK_ORDERS.filter(order => {
-    // Search
-    const matchSearch = order.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                        order.employee.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    // Date
-    const orderDate = parseDate(order.date);
-    const from = new Date(fromDate);
-    from.setHours(0, 0, 0, 0);
-    const to = new Date(toDate);
-    to.setHours(23, 59, 59, 999);
-    const matchDate = orderDate >= from && orderDate <= to;
-    
-    // Employee
-    const matchEmployee = employeeFilter === 'all' || 
-      (employeeFilter === 'nguyenvana' && order.employee === 'Nguyễn Văn A');
-
-    // Status
-    const matchStatus = statusFilter === 'all' || 
-      (statusFilter === 'completed' && order.status === 'Hoàn tất') ||
-      (statusFilter === 'cancelled' && order.status === 'Đã hủy');
-
-    return matchSearch && matchDate && matchEmployee && matchStatus;
-  });
+  const exportFileName = buildExportFileName(filteredOrders.length);
 
   const handleExportExcel = () => {
-    const exportData = filteredOrders.map(order => ({
-      'Mã Đơn': order.id.split('_')[0],
-      'Ngày': order.date,
-      'Giờ vào': order.timeIn,
-      'Giờ ra': order.timeOut,
-      'Nhân viên': order.employee,
-      'Phương thức thanh toán': order.paymentMethod || '--',
-      'Tổng tiền': order.totalAmount,
-      'Trạng thái': order.status,
-      'Lý do hủy': order.reason || '',
-      'Tiền khách trả': order.customerPaid,
-      'Tiền thừa': order.change,
-      'Danh sách sản phẩm': order.products.map(p => `${p.name} (x${p.quantity})`).join(', ')
-    }));
+    const exportData = filteredOrders.map((order) => {
+      const dt = formatDateTime(order.createdAt);
+      return {
+        "Mã Đơn": order.orderCode,
+        Ngày: typeof dt === "object" ? dt.date : "",
+        Giờ: typeof dt === "object" ? dt.time : "",
+        "Nhân viên": order.employeeName || "--",
+        "Loại hình": order.sessionType
+          ? SERVICE_TYPE_LABEL[order.sessionType] || order.sessionType
+          : "Mang đi",
+        "Phương thức thanh toán": order.paymentMethod
+          ? PAYMENT_LABEL[order.paymentMethod] || order.paymentMethod
+          : "--",
+        "Tổng tiền": order.totalAmount,
+        "Trạng thái": order.status === "COMPLETED" ? "Hoàn tất" : "Đã hủy",
+        "Ghi chú": order.note || "",
+        "Danh sách sản phẩm": order.items
+          .map((p) => `${p.productName} (x${p.quantity})`)
+          .join(", "),
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
-    
-    // Auto-size columns slightly
     const wscols = [
-      {wch: 15}, {wch: 12}, {wch: 10}, {wch: 10}, 
-      {wch: 20}, {wch: 25}, {wch: 15}, {wch: 15}, 
-      {wch: 25}, {wch: 15}, {wch: 15}, {wch: 50}
+      { wch: 18 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 25 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 25 },
+      { wch: 50 },
     ];
-    worksheet['!cols'] = wscols;
-
+    worksheet["!cols"] = wscols;
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'DonHang');
-    
-    XLSX.writeFile(workbook, `DanhSachDonHang_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "DonHang");
+    XLSX.writeFile(workbook, buildExportFileName(filteredOrders.length));
   };
 
   return (
     <div className="orders-page-container">
-      {/* Header */}
       <div className="orders-page-header">
         <h1 className="orders-page-title">ĐƠN HÀNG</h1>
-        <button className="btn-export-excel" onClick={() => setIsExportModalOpen(true)}>
-          Xuất Excel <img src={iconExportExcel} alt="Export Excel" className="btn-icon-img" />
+        <button
+          className="btn-export-excel"
+          onClick={() => setIsExportModalOpen(true)}
+        >
+          Xuất Excel{" "}
+          <img
+            src={iconExportExcel}
+            alt="Export Excel"
+            className="btn-icon-img"
+          />
         </button>
       </div>
 
-      {/* Main Split Layout */}
       <div className="orders-split-layout">
-        
-        {/* Left Column: Filters + List */}
         <div className="orders-left-column">
-          {/* Filter Bar */}
           <div className="orders-filter-bar">
             <div className="orders-filter-row">
               <div className="orders-search-wrapper">
                 <Search className="orders-search-icon" size={16} />
-                <input 
-                  type="text" 
-                  className="orders-search-input" 
-                  placeholder="Tìm kiếm..."
+                <input
+                  type="text"
+                  className="orders-search-input"
+                  placeholder="Tìm kiếm mã đơn, nhân viên..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              
               <div className="orders-date-group">
                 <span>Từ:</span>
-                <input 
-                  type="date" 
-                  className="orders-date-input" 
+                <input
+                  type="date"
+                  className="orders-date-input"
                   value={fromDate}
                   max={toDate || today}
                   onChange={(e) => setFromDate(e.target.value)}
                 />
               </div>
-              
               <div className="orders-date-group">
                 <span>Đến:</span>
-                <input 
-                  type="date" 
-                  className="orders-date-input" 
+                <input
+                  type="date"
+                  className="orders-date-input"
                   value={toDate}
                   max={today}
                   onChange={(e) => {
-                    const newToDate = e.target.value;
-                    setToDate(newToDate);
-                    if (fromDate && newToDate && fromDate > newToDate) {
-                      setFromDate(newToDate);
-                    }
+                    const v = e.target.value;
+                    setToDate(v);
+                    if (fromDate > v) setFromDate(v);
                   }}
                 />
               </div>
             </div>
-
             <div className="orders-filter-row">
-              <select 
-                className="orders-filter-select" 
+              <select
+                className="orders-filter-select"
                 style={{ flex: 1 }}
                 value={employeeFilter}
                 onChange={(e) => setEmployeeFilter(e.target.value)}
               >
                 <option value="all">Tất cả nhân viên</option>
-                <option value="nguyenvana">Nguyễn Văn A</option>
+                {staffList.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
               </select>
-
-              <select 
-                className="orders-filter-select" 
+              <select
+                className="orders-filter-select"
                 style={{ flex: 1 }}
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
                 <option value="all">Tất cả trạng thái</option>
-                <option value="completed">Hoàn tất</option>
-                <option value="cancelled">Đã hủy</option>
+                <option value="COMPLETED">Hoàn tất</option>
+                <option value="CANCELLED">Đã hủy</option>
               </select>
-
-              <button 
+              <button
                 className="btn-clear-filter"
                 onClick={handleClearFilters}
                 disabled={!hasFiltersChanged}
@@ -295,217 +543,463 @@ export default function OrderManagementPage() {
             </div>
           </div>
 
-          {/* Left Panel - List */}
-          <div className="orders-list-panel">
-          <table className="orders-table">
-            <thead>
-              <tr>
-                <th style={{ width: '15%' }}>Mã Đơn</th>
-                <th style={{ width: '25%' }}>Thời Gian</th>
-                <th style={{ width: '25%' }}>Nhân Viên</th>
-                <th style={{ width: '20%' }}>Tổng tiền</th>
-                <th style={{ width: '15%', textAlign: 'center' }}>Trạng Thái</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredOrders.length > 0 ? (
-                filteredOrders.map(order => {
-                  const isSelected = order.id === selectedOrderId;
-                return (
-                  <tr 
-                    key={order.id} 
-                    className={isSelected ? 'selected' : ''}
-                    onClick={() => handleSelectOrder(order)}
-                  >
-                    <td className="order-id-text">{order.id.split('_')[0]}</td>
-                    <td>
-                      <div>{order.date}</div>
-                      <div className="order-time-text">{order.timeIn}</div>
-                    </td>
-                    <td style={{ fontWeight: 500 }}>{order.employee}</td>
-                    <td style={{ fontWeight: 600 }}>{formatCurrency(order.totalAmount)}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span className={`order-status-badge ${order.status === 'Hoàn tất' ? 'status-completed' : 'status-cancelled'}`}>
-                        {order.status}
-                      </span>
+          <div
+            className={`orders-list-panel${isRefreshing ? " panel-is-refreshing" : ""}`}
+          >
+            {isRefreshing && (
+              <span className="panel-refresh-badge" aria-live="polite">
+                Đang cập nhật...
+              </span>
+            )}
+            <table className="orders-table">
+              <thead>
+                <tr>
+                  <th style={{ width: "20%" }}>Mã Đơn</th>
+                  <th style={{ width: "25%" }}>Thời Gian</th>
+                  <th style={{ width: "25%" }}>Nhân Viên</th>
+                  <th style={{ width: "15%" }}>Tổng tiền</th>
+                  <th style={{ width: "15%", textAlign: "center" }}>T.Thái</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isInitialLoading && filteredOrders.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      style={{
+                        textAlign: "center",
+                        padding: "20px",
+                        color: "#888",
+                      }}
+                    >
+                      Đang tải...
                     </td>
                   </tr>
-                );
-              })) : (
-                <tr>
-                  <td colSpan={5} style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
-                    Không tìm thấy đơn hàng nào phù hợp với bộ lọc
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-          </div>
-        </div>
-
-        {/* Right Panel - Detail */}
-        {filteredOrders.length > 0 ? (
-        <div className="order-detail-panel">
-          <div className="order-detail-header">
-            <div className="order-detail-title-wrapper">
-              <div className="order-detail-icon">
-                <FileText size={24} />
-              </div>
-              <h2 className="order-detail-title">{selectedOrder.id.split('_')[0]}</h2>
-            </div>
-            {isEditable && (
-              <button 
-                className="btn-save-order"
-                disabled={isSaveDisabled}
-              >
-                Lưu
-              </button>
-            )}
-          </div>
-
-          <div className="order-detail-body">
-            <div className="order-info-wrapper">
-              {/* Grid Info */}
-            <div className="order-info-grid">
-              <div className="order-info-item">
-                <span className="order-info-label">Ngày:</span>
-                <span className="order-info-value">{selectedOrder.date}</span>
-              </div>
-              <div className="order-info-item">
-                <span className="order-info-label">Nhân viên:</span>
-                <span className="order-info-value">{selectedOrder.employee}</span>
-              </div>
-              <div className="order-info-item">
-                <span className="order-info-label">Giờ vào:</span>
-                <span className="order-info-value">{selectedOrder.timeIn}</span>
-              </div>
-              <div className="order-info-item">
-                <span className="order-info-label">Phương thức thanh toán:</span>
-                <span className="order-info-value">{selectedOrder.paymentMethod || '--'}</span>
-              </div>
-            </div>
-
-            {/* Status & Reason */}
-            <div className="order-status-group">
-              <span className="order-info-label">Trạng thái:</span>
-              <div className="radio-group">
-                <label className="radio-label">
-                  <input 
-                    type="radio" 
-                    name="orderStatus" 
-                    value="Hoàn tất" 
-                    checked={currentStatus === 'Hoàn tất'}
-                    onChange={() => setCurrentStatus('Hoàn tất')}
-                    style={{ accentColor: '#256e05', cursor: isEditable ? 'pointer' : 'default' }}
-                    disabled={!isEditable}
-                  />
-                  Hoàn Tất
-                </label>
-                <label className="radio-label">
-                  <input 
-                    type="radio" 
-                    name="orderStatus" 
-                    value="Đã hủy" 
-                    checked={currentStatus === 'Đã hủy'}
-                    onChange={() => setCurrentStatus('Đã hủy')}
-                    style={{ accentColor: '#256e05', cursor: isEditable ? 'pointer' : 'default' }}
-                    disabled={!isEditable}
-                  />
-                  Đã hủy
-                </label>
-              </div>
-            </div>
-
-            {currentStatus === 'Đã hủy' && (
-              <div className="order-status-group">
-                <span className="order-info-label">Lý do:</span>
-                <input 
-                  type="text" 
-                  className="reason-input"
-                  value={currentReason}
-                  onChange={(e) => setCurrentReason(e.target.value)}
-                  disabled={!isEditable}
-                />
-              </div>
-            )}
-            </div>
-
-            {/* Products Table */}
-            <div className="order-products-section">
-              <div className="order-products-title">Danh sách sản phẩm</div>
-              <div className="order-products-table-wrapper">
-                <table className="order-products-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: '40%' }}>SẢN PHẨM</th>
-                      <th style={{ width: '25%', textAlign: 'right' }}>GIÁ</th>
-                      <th style={{ width: '10%', textAlign: 'center' }}>SL</th>
-                      <th style={{ width: '25%', textAlign: 'right' }}>TỔNG</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedOrder.products.map(p => (
-                      <tr key={p.id}>
+                ) : filteredOrders.length > 0 ? (
+                  filteredOrders.map((order) => {
+                    const dt = formatDateTime(order.createdAt);
+                    const isSelected = order.id === selectedOrderId;
+                    return (
+                      <tr
+                        key={order.id}
+                        className={isSelected ? "selected" : ""}
+                        onClick={() => handleSelectOrder(order)}
+                      >
+                        <td className="order-id-text">{order.orderCode}</td>
                         <td>
-                          <div className="product-item-name">{p.name}</div>
-                          <div className="product-item-desc">{p.description}</div>
+                          <div>{typeof dt === "object" ? dt.date : "--"}</div>
+                          <div className="order-time-text">
+                            {typeof dt === "object" ? dt.time : "--"}
+                          </div>
                         </td>
-                        <td style={{ textAlign: 'right' }}>{formatCurrency(p.price)}</td>
-                        <td style={{ textAlign: 'center' }}>
-                          {p.quantity < 10 ? `0${p.quantity}` : p.quantity}
+                        <td style={{ fontWeight: 500 }}>
+                          {order.employeeName || "--"}
                         </td>
-                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(p.total)}</td>
+                        <td style={{ fontWeight: 600 }}>
+                          {formatCurrency(order.totalAmount)}
+                        </td>
+                        <td style={{ textAlign: "center" }}>
+                          <span
+                            className={`order-status-badge ${
+                              order.status === "COMPLETED"
+                                ? "status-completed"
+                                : "status-cancelled"
+                            }`}
+                          >
+                            {order.status === "COMPLETED"
+                              ? "Hoàn tất"
+                              : "Đã hủy"}
+                          </span>
+                        </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer Summary */}
-          <div className="order-detail-footer">
-            <div className="order-summary-row total">
-              <span>Tổng cộng đơn</span>
-              <span className="value">{formatCurrency(selectedOrder.totalAmount)}</span>
-            </div>
-            <div className="order-summary-row small">
-              <span>Tiền khách trả</span>
-              <span>{formatCurrency(selectedOrder.customerPaid)}</span>
-            </div>
-            <div className="order-summary-row small">
-              <span>Tiền thừa</span>
-              <span>{formatCurrency(selectedOrder.change)}</span>
-            </div>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      style={{
+                        textAlign: "center",
+                        padding: "20px",
+                        color: "#666",
+                      }}
+                    >
+                      Không tìm thấy đơn hàng nào
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
+
+        {selectedOrder ? (
+          <div
+            className={`order-detail-panel${isRefreshing ? " panel-is-refreshing" : ""}`}
+          >
+            <div className="order-detail-header">
+              <div className="order-detail-title-wrapper">
+                <div className="order-detail-icon">
+                  <FileText size={24} />
+                </div>
+                <h2 className="order-detail-title">
+                  {selectedOrder.orderCode}
+                </h2>
+              </div>
+              {isEditable && (
+                <button
+                  type="button"
+                  className="btn-save-order"
+                  disabled={isSaveDisabled || isSaving}
+                  onClick={handleSave}
+                >
+                  {isSaving ? "Đang lưu..." : "Lưu"}
+                </button>
+              )}
+            </div>
+
+            <div className="order-detail-body">
+              <div className="order-info-wrapper">
+                <div className="order-info-grid">
+                  <div className="order-info-item">
+                    <span className="order-info-label">Ngày:</span>
+                    <span className="order-info-value">
+                      {typeof formatDateTime(selectedOrder.createdAt) ===
+                      "object"
+                        ? (formatDateTime(selectedOrder.createdAt) as any).date
+                        : "--"}
+                    </span>
+                  </div>
+                  <div className="order-info-item">
+                    <span className="order-info-label">Nhân viên:</span>
+                    <span className="order-info-value">
+                      {selectedOrder.employeeName || "--"}
+                    </span>
+                  </div>
+                  <div className="order-info-item">
+                    <span className="order-info-label">Giờ tạo đơn:</span>
+                    <span className="order-info-value">
+                      {typeof formatDateTime(selectedOrder.createdAt) ===
+                      "object"
+                        ? (formatDateTime(selectedOrder.createdAt) as any).time
+                        : "--"}
+                    </span>
+                  </div>
+                  <div
+                    className={`order-info-item${
+                      isBankTransfer(selectedOrder.paymentMethod)
+                        ? " order-info-item--bank-transfer"
+                        : ""
+                    }`}
+                  >
+                    <span className="order-info-label">
+                      Phương thức thanh toán:
+                    </span>
+                    <span
+                      className={`order-info-value${
+                        isBankTransfer(selectedOrder.paymentMethod)
+                          ? " order-payment-with-proof"
+                          : ""
+                      }`}
+                    >
+                      <span className="order-payment-method-text">
+                        {selectedOrder.paymentMethod
+                          ? PAYMENT_LABEL[selectedOrder.paymentMethod] ||
+                            selectedOrder.paymentMethod
+                          : "--"}
+                      </span>
+                      {isBankTransfer(selectedOrder.paymentMethod) &&
+                        (selectedOrder.hasTransferProof ||
+                          selectedOrder.transferProofImageUrl) && (
+                        <button
+                          type="button"
+                          className="btn-transfer-proof-icon"
+                          onClick={() => setIsTransferProofOpen(true)}
+                          disabled={isDetailLoading || !selectedOrder.transferProofImageUrl}
+                          title={
+                            selectedOrder.transferProofImageUrl
+                              ? "Xem minh chứng chuyển khoản"
+                              : isDetailLoading
+                                ? "Đang tải minh chứng..."
+                                : "Không còn minh chứng (đã quá hạn lưu)"
+                          }
+                          aria-label="Xem minh chứng chuyển khoản"
+                        >
+                          <TransferProofViewIcon />
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="order-status-group">
+                  <span className="order-info-label">Trạng thái:</span>
+                  <div className="radio-group">
+                    <label className="radio-label">
+                      <input
+                        type="radio"
+                        name="orderStatus"
+                        value="COMPLETED"
+                        checked={currentStatus === "COMPLETED"}
+                        onChange={() => setCurrentStatus("COMPLETED")}
+                        style={{
+                          accentColor: "#256e05",
+                          cursor: isEditable ? "pointer" : "default",
+                        }}
+                        disabled={!isEditable}
+                      />
+                      Hoàn Tất
+                    </label>
+                    <label className="radio-label">
+                      <input
+                        type="radio"
+                        name="orderStatus"
+                        value="CANCELLED"
+                        checked={currentStatus === "CANCELLED"}
+                        onChange={() => setCurrentStatus("CANCELLED")}
+                        style={{
+                          accentColor: "#256e05",
+                          cursor: isEditable ? "pointer" : "default",
+                        }}
+                        disabled={!isEditable}
+                      />
+                      Đã hủy
+                    </label>
+                  </div>
+                </div>
+
+                {currentStatus === "CANCELLED" && (
+                  <div className="order-status-group">
+                    <span className="order-info-label">
+                      Ghi chú / Lý do hủy:
+                    </span>
+                    <input
+                      type="text"
+                      className="reason-input"
+                      value={currentNote}
+                      onChange={(e) => setCurrentNote(e.target.value)}
+                      disabled={!isEditable}
+                      placeholder="Nhập lý do hủy..."
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="order-products-section">
+                <div className="order-products-title">Danh sách sản phẩm</div>
+                <div className="order-products-table-wrapper">
+                  <table className="order-products-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: "40%" }}>SẢN PHẨM</th>
+                        <th style={{ width: "25%", textAlign: "right" }}>
+                          GIÁ
+                        </th>
+                        <th style={{ width: "10%", textAlign: "center" }}>
+                          SL
+                        </th>
+                        <th style={{ width: "25%", textAlign: "right" }}>
+                          TỔNG
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {isDetailLoading && selectedOrder.items.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            style={{
+                              textAlign: "center",
+                              padding: "16px",
+                              color: "#888",
+                            }}
+                          >
+                            Đang tải chi tiết...
+                          </td>
+                        </tr>
+                      ) : selectedOrder.items.length > 0 ? (
+                        selectedOrder.items.map((p, idx) => (
+                          <tr key={idx}>
+                            <td>
+                              <div className="product-item-name">
+                                {p.productName}
+                              </div>
+                              <div className="product-item-desc">
+                                {SERVICE_TYPE_LABEL[p.serviceType] ||
+                                  p.serviceType}
+                              </div>
+                            </td>
+                            <td style={{ textAlign: "right" }}>
+                              {formatCurrency(p.unitPrice)}
+                            </td>
+                            <td style={{ textAlign: "center" }}>
+                              {p.quantity < 10 ? `0${p.quantity}` : p.quantity}
+                            </td>
+                            <td style={{ textAlign: "right", fontWeight: 600 }}>
+                              {formatCurrency(p.lineTotal)}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            style={{
+                              textAlign: "center",
+                              color: "#888",
+                              padding: "20px",
+                            }}
+                          >
+                            Chưa có sản phẩm
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="order-detail-footer">
+              <div className="order-summary-row total">
+                <span>Tổng cộng đơn</span>
+                <span className="value">
+                  {formatCurrency(selectedOrder.totalAmount)}
+                </span>
+              </div>
+              {selectedOrder.discountAmount > 0 && (
+                <div className="order-summary-row small">
+                  <span>Giảm giá</span>
+                  <span>-{formatCurrency(selectedOrder.discountAmount)}</span>
+                </div>
+              )}
+              {selectedOrder.paymentAmount != null && (
+                <div className="order-summary-row small">
+                  <span>Tiền khách trả</span>
+                  <span>{formatCurrency(selectedOrder.paymentAmount)}</span>
+                </div>
+              )}
+            </div>
+          </div>
         ) : (
           <div className="order-detail-panel empty-detail">
             <FileText size={64} className="empty-detail-icon" />
-            <p className="empty-detail-text">Không có đơn hàng nào để hiển thị chi tiết</p>
+            <p className="empty-detail-text">
+              {isInitialLoading
+                ? "Đang tải dữ liệu..."
+                : "Không có đơn hàng nào để hiển thị"}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {isTransferProofOpen &&
+        selectedOrder &&
+        isBankTransfer(selectedOrder.paymentMethod) && (
+          <div
+            className="transfer-proof-modal-overlay"
+            onClick={() => setIsTransferProofOpen(false)}
+          >
+            <div
+              className="transfer-proof-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="transfer-proof-modal-header">
+                <h3 className="transfer-proof-modal-title">
+                  Minh chứng chuyển khoản
+                </h3>
+                <button
+                  type="button"
+                  className="transfer-proof-modal-close"
+                  onClick={() => setIsTransferProofOpen(false)}
+                  aria-label="Đóng"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <p className="transfer-proof-order-code">
+                {selectedOrder.orderCode}
+              </p>
+              <div className="transfer-proof-total">
+                <span className="transfer-proof-total-label">Tổng tiền</span>
+                <span className="transfer-proof-total-value">
+                  {formatCurrency(
+                    selectedOrder.paymentAmount ?? selectedOrder.totalAmount
+                  )}
+                </span>
+              </div>
+              <div className="transfer-proof-image-wrap">
+                {selectedOrder.transferProofImageUrl ? (
+                  <img
+                    src={selectedOrder.transferProofImageUrl}
+                    alt="Minh chứng chuyển khoản"
+                    className="transfer-proof-image"
+                  />
+                ) : (
+                  <p className="transfer-proof-no-image">
+                    Chưa có ảnh minh chứng chuyển khoản.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
-      </div>
-
-      {/* Export Modal */}
       {isExportModalOpen && (
         <div className="export-modal-overlay">
           <div className="export-modal">
             <h3 className="export-modal-title">Xác nhận xuất file Excel</h3>
             <div className="export-modal-content">
-              <p><strong>Thời gian:</strong> {fromDate === toDate ? `Ngày ${formatDateDisplay(fromDate)}` : `Từ ${formatDateDisplay(fromDate)} đến ${formatDateDisplay(toDate)}`}</p>
-              <p><strong>Nhân viên:</strong> {employeeFilter === 'all' ? 'Tất cả nhân viên' : (employeeFilter === 'nguyenvana' ? 'Nguyễn Văn A' : employeeFilter)}</p>
-              <p><strong>Trạng thái:</strong> {statusFilter === 'all' ? 'Tất cả trạng thái' : (statusFilter === 'completed' ? 'Hoàn tất' : 'Đã hủy')}</p>
-              <p><strong>Tổng số đơn hàng:</strong> {filteredOrders.length}</p>
+              <p>
+                <strong>Thời gian:</strong>{" "}
+                {fromDate === toDate
+                  ? `Ngày ${formatDateDisplay(fromDate)}`
+                  : `Từ ${formatDateDisplay(fromDate)} đến ${formatDateDisplay(
+                      toDate
+                    )}`}
+              </p>
+              <p>
+                <strong>Trạng thái:</strong>{" "}
+                {statusFilter === "all"
+                  ? "Tất cả"
+                  : statusFilter === "COMPLETED"
+                  ? "Hoàn tất"
+                  : "Đã hủy"}
+              </p>
+              <p>
+                <strong>Tổng số đơn hàng:</strong> {filteredOrders.length}
+              </p>
+              <p>
+                <strong>Nhân viên:</strong>{" "}
+                {employeeFilter === "all"
+                  ? "Tất cả"
+                  : staffList.find((s) => s.id === employeeFilter)?.name ||
+                    employeeFilter}
+              </p>
+              {searchTerm.trim() && (
+                <p>
+                  <strong>Tìm kiếm:</strong> &quot;{searchTerm.trim()}&quot;
+                </p>
+              )}
+              <p className="export-modal-filename">
+                <strong>Tên file xuất ra:</strong>
+                <code>{exportFileName}</code>
+              </p>
               {filteredOrders.length === 0 && (
-                <p style={{ color: '#dc3545', marginTop: '10px' }}>* Không có dữ liệu để xuất file.</p>
+                <p style={{ color: "#dc3545", marginTop: "10px" }}>
+                  * Không có dữ liệu để xuất file.
+                </p>
               )}
             </div>
             <div className="export-modal-actions">
-              <button className="btn-cancel-export" onClick={() => setIsExportModalOpen(false)}>Hủy</button>
-              <button 
-                className="btn-confirm-export" 
+              <button
+                className="btn-cancel-export"
+                onClick={() => setIsExportModalOpen(false)}
+              >
+                Hủy
+              </button>
+              <button
+                className="btn-confirm-export"
                 onClick={() => {
                   handleExportExcel();
                   setIsExportModalOpen(false);

@@ -17,4 +17,3 @@ H thu hồi thẻ.
 > **Lưu ý Về Audit Log (Áp dụng chung):**
 > Ở tất cả các tab, khi có bất kỳ thao tác `INSERT`, `UPDATE`, hay `DELETE` nào làm thay đổi dữ liệu quan trọng, hệ thống tự động sinh ra một record:
 > * `INSERT INTO audit_logs` (lưu `user_id` người thao tác, `action` (tên hành động), `entity_type` (tên bảng), `entity_id` (ID dòng), `old_value` và `new_value` dưới dạng JSON).
-HHãythuwr đi, chuyển

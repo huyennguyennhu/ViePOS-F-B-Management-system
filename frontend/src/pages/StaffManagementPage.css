@@ -24,6 +24,25 @@
   text-transform: uppercase;
   line-height: 1.4;
   padding-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.staff-refresh-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: #256e05;
+  text-transform: none;
+  background: #f0f7eb;
+  border: 1px solid #c8e6b8;
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.staff-table-container.panel-is-refreshing {
+  opacity: 0.92;
 }
 
 .btn-add-staff {

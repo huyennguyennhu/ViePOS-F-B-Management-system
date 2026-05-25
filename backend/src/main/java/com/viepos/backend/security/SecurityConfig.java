@@ -2,6 +2,7 @@ package com.viepos.backend.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
@@ -31,7 +32,37 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**", "/api/staff/login", "/api/staff/register", "/api/ping", "/error").permitAll()
+                .requestMatchers("/api/ping", "/error").permitAll()
+                .requestMatchers("/api/auth/login").permitAll()
+                .requestMatchers("/api/staff/login", "/api/staff/register").permitAll()
+                // Tự phục vụ PIN (POS)
+                .requestMatchers(
+                        "/api/staff/verify-pin",
+                        "/api/staff/pin-change-request",
+                        "/api/staff/forgot-pin"
+                ).hasRole("STAFF")
+                // Quản lý — không cho STAFF
+                .requestMatchers(
+                        "/api/staff/all",
+                        "/api/staff/pending",
+                        "/api/staff/history/**",
+                        "/api/staff/pin-change-requests/**",
+                        "/api/staff/pin-reset-requests/**"
+                ).hasAnyRole("ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/staff/*/approve").hasAnyRole("ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/staff/*/reject").hasAnyRole("ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/staff").hasAnyRole("ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/staff/*").hasAnyRole("ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/staff/*").hasAnyRole("ADMIN", "ROOT_ADMIN")
+                .requestMatchers("/api/inventory/**").hasAnyRole("ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/orders/*/status").hasAnyRole("ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/products").hasAnyRole("ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/products/*").hasAnyRole("ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/products/*").hasAnyRole("ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/categories").hasAnyRole("ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/categories/*").hasAnyRole("ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/categories/*").hasAnyRole("ADMIN", "ROOT_ADMIN")
+                // POS + đọc dữ liệu: STAFF, ADMIN, ROOT_ADMIN (đã đăng nhập)
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

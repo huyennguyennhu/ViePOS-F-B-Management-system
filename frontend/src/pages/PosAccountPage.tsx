@@ -1,6 +1,7 @@
 import { Camera, Contact, User, Phone, Mail, Calendar, ChevronUp, ChevronDown, ChevronRight, RefreshCw, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { clearAuth } from '../utils/auth';
 import iconEditGrey from '../../assets/icon/edit_grey.png';
 import './PosAccountPage.css';
 
@@ -9,25 +10,24 @@ export default function PosAccountPage() {
   const [isInfoExpanded, setIsInfoExpanded] = useState(false);
   const [isSecurityExpanded, setIsSecurityExpanded] = useState(false);
   
-  const staffName = localStorage.getItem('staffName') || 'Người dùng';
-  const staffEmail = localStorage.getItem('staffEmail') || 'Chưa cập nhật';
-  // Translate role from ID/english to Vietnamese if needed, or just use as is
-  const staffRole = localStorage.getItem('staffRole') || 'Nhân viên Thu ngân';
-  const roleDisplay = staffRole.includes('admin') ? 'Quản lý' : 'Nhân viên Thu ngân';
-  
-  const staffId = localStorage.getItem('staffId') || '---';
-  const staffPhone = localStorage.getItem('staffPhone') || 'Chưa cập nhật';
-  const lastLoginTime = localStorage.getItem('lastLoginTime') || 'Chưa rõ';
+  const staffName     = localStorage.getItem('staffName')      || '---';
+  const staffEmail    = localStorage.getItem('staffEmail')     || '---';
+  const staffRole     = localStorage.getItem('role')           || '---';
+  const roleDisplay   =
+    staffRole === 'ADMIN' || staffRole === 'ROOT_ADMIN'
+      ? 'Quản lý'
+      : staffRole === 'STAFF'
+        ? 'Nhân viên Thu ngân'
+        : staffRole === '---'
+          ? '---'
+          : staffRole;
+  const staffId       = localStorage.getItem('staffId')        || '---';
+  const staffPhone    = localStorage.getItem('staffPhone')     || '---';
+  const lastLoginTime = localStorage.getItem('lastLoginTime')  || '---';
   
   const handleLogout = () => {
-    localStorage.removeItem('staffToken');
-    localStorage.removeItem('staffRole');
-    localStorage.removeItem('staffName');
-    localStorage.removeItem('staffEmail');
-    localStorage.removeItem('staffId');
-    localStorage.removeItem('staffPhone');
-    localStorage.removeItem('lastLoginTime');
-    navigate('/staff/login');
+    clearAuth();
+    navigate('/login/staff');
   };
 
   return (

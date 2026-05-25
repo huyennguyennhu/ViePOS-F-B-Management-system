@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Search, HelpCircle, Heart, Bell, ChevronDown, LogOut,
          Home, BarChart2, ShoppingCart, Package, Users, Coffee, Tag, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { clearAuth } from '../utils/auth';
 import logoUrl from '../../assets/favicon/logoname.png';
 import './Header.css';
 
@@ -97,10 +98,7 @@ export default function Header() {
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
-    localStorage.removeItem('staffName');
-    localStorage.removeItem('staffEmail');
+    clearAuth();
     navigate('/');
   };
 

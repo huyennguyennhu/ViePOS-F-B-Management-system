@@ -1,16 +1,27 @@
 package com.viepos.backend.repositories;
 
 import com.viepos.backend.models.User;
-import com.viepos.backend.models.Role;
-import com.viepos.backend.models.UserStatus;
+import com.viepos.backend.models.enums.EmployeeRole;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
-import java.util.Optional;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
-public interface UserRepository extends JpaRepository<User, String> {
+@Repository
+public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmail(String email);
-    List<User> findByRoleAndStatus(Role role, UserStatus status);
-    List<User> findByRole(Role role);
-    List<User> findByRoleAndStatusNot(Role role, UserStatus status);
+    Optional<User> findByEmployee_EmployeeId(String employeeId);
+    boolean existsByEmail(String email);
+
+    @Query("""
+            SELECT u FROM User u
+            JOIN FETCH u.employee e
+            WHERE e.role = :role
+            ORDER BY e.fullName ASC
+            """)
+    List<User> findAllWithEmployeeByRole(@Param("role") EmployeeRole role);
 }

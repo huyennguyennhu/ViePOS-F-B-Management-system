@@ -1,96 +1,126 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Search, X } from 'lucide-react';
+import { inventoryAPI } from '../services/api';
 import './InventoryHistoryPage.css';
-import './InventoryManagementPage.css'; // Reuse modal styles
+import './InventoryManagementPage.css';
 
-// Mock Data matching the screenshot
-const mockHistoryData = [
-  { id: 1, time: '13:47 19/05/2026', product: 'Cà phê sữa', sku: 'SKU - BJBMSH', action: 'Nhập kho', quantity: 20, oldStock: 4, newStock: 24, staff: 'Nguyễn Văn A', refCode: 'NK1234' },
-  { id: 2, time: '13:47 19/05/2026', product: 'Cà phê sữa', sku: 'SKU - BJBMSH', action: 'Nhập kho', quantity: 20, oldStock: 4, newStock: 24, staff: 'Nguyễn Văn A', refCode: 'NK1234' },
-  { id: 3, time: '13:47 19/05/2026', product: 'Cà phê sữa', sku: 'SKU - BJBMSH', action: 'Xuất kho', quantity: -5, oldStock: 5, newStock: 0, staff: 'Nguyễn Văn A', refCode: 'XK1234' },
-  { id: 4, time: '08:30 19/05/2026', product: 'Cà phê muối', sku: 'SKU - BJBMSH', action: 'Bán hàng', quantity: -1, oldStock: 5, newStock: 4, staff: 'Nguyễn Văn A', refCode: 'OR0123' },
-];
+const TRANSACTION_TYPE_LABEL: Record<string, string> = {
+  IMPORT: 'Nhập kho',
+  EXPORT: 'Xuất kho',
+  SALE: 'Bán hàng',
+  ADJUSTMENT: 'Điều chỉnh',
+};
+
+const BADGE_CLASS: Record<string, string> = {
+  IMPORT: 'badge-import',
+  EXPORT: 'badge-export',
+  SALE: 'badge-sale',
+  ADJUSTMENT: 'badge-import',
+};
 
 export default function InventoryHistoryPage() {
-  const [searchTerm, setSearchTerm] = useState('');
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-  const [fromDate, setFromDate] = useState('2026-05-19');
-  const [toDate, setToDate] = useState('2026-05-19');
-  const [actionFilter, setActionFilter] = useState('Tất cả loại biến động');
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [fromDate, setFromDate] = useState(todayStr);
+  const [toDate, setToDate] = useState(todayStr);
+  const [actionFilter, setActionFilter] = useState('ALL');
+
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
+
+  const fetchTransactions = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const params: any = { fromDate, toDate };
+      if (actionFilter !== 'ALL') params.type = actionFilter;
+      const res = await inventoryAPI.getTransactions(params);
+      setTransactions(res.data);
+    } catch (err) {
+      console.error('Error fetching inventory transactions:', err);
+      setTransactions([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fromDate, toDate, actionFilter]);
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
+
+  // Flatten transactions into rows (one row per item per transaction)
+  const flatRows = transactions.flatMap((t: any) =>
+    t.items && t.items.length > 0
+      ? t.items.map((item: any) => ({
+          transactionId: t.id,
+          transactionCode: t.transactionCode,
+          createdAt: t.createdAt,
+          transactionType: t.transactionType,
+          note: t.note,
+          staffName: t.createdBy?.name || '--',
+          productName: item.productName || '--',
+          productSku: item.productSku || '--',
+          quantity: Number(item.quantity),
+          stockBefore: Number(item.stockBefore),
+          stockAfter: Number(item.stockAfter),
+          // group reference
+          _transaction: t,
+        }))
+      : [{
+          transactionId: t.id,
+          transactionCode: t.transactionCode,
+          createdAt: t.createdAt,
+          transactionType: t.transactionType,
+          note: t.note,
+          staffName: t.createdBy?.name || '--',
+          productName: '--',
+          productSku: '--',
+          quantity: 0,
+          stockBefore: 0,
+          stockAfter: 0,
+          _transaction: t,
+        }]
+  );
+
+  const filteredRows = flatRows.filter(row => {
+    const matchSearch = row.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      row.productSku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      row.staffName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      row.transactionCode.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchSearch;
+  });
+
+  // Compute summary metrics from filtered results
+  const totalOperations = new Set(filteredRows.map(r => r.transactionId)).size;
+  const totalIncrease = filteredRows.filter(r => r.quantity > 0).reduce((sum, r) => sum + r.quantity, 0);
+  const totalDecrease = filteredRows.filter(r => r.quantity < 0).reduce((sum, r) => sum + Math.abs(r.quantity), 0);
 
   const handleFromDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
-    if (!val) {
-      setFromDate('');
-      return;
-    }
-    if (val > toDate && toDate !== '') {
-      setFromDate(toDate);
-    } else {
-      setFromDate(val);
-    }
+    if (!val) { setFromDate(''); return; }
+    setFromDate(val > toDate && toDate ? toDate : val);
   };
 
   const handleToDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
-    if (!val) {
-      setToDate('');
-      return;
-    }
-    if (val > todayStr) {
-      setToDate(todayStr);
-      if (todayStr < fromDate && fromDate !== '') setFromDate(todayStr);
-    } else {
-      setToDate(val);
-      if (val < fromDate && fromDate !== '') {
-        setFromDate(val);
-      }
-    }
+    if (!val) { setToDate(''); return; }
+    const capped = val > todayStr ? todayStr : val;
+    setToDate(capped);
+    if (fromDate && capped < fromDate) setFromDate(capped);
   };
 
-  const handleRowClick = (item: any) => {
-    // Generate some mock details for the transaction
-    const transactionDetails = {
-       refCode: item.refCode,
-       time: item.time,
-       staff: item.staff,
-       action: item.action,
-       note: item.action === 'Nhập kho' ? 'Nhập hàng định kỳ tuần 3 tháng 5' : item.action === 'Xuất kho' ? 'Xuất nguyên liệu cho ca sáng' : 'Đơn hàng bán trực tiếp',
-       items: [
-         item,
-         { ...item, id: 999, product: 'Sữa đặc Ngôi Sao', sku: 'SKU - SDNS', quantity: item.action === 'Nhập kho' ? 10 : item.action === 'Xuất kho' ? -2 : -1, oldStock: 15, newStock: item.action === 'Nhập kho' ? 25 : item.action === 'Xuất kho' ? 13 : 14 }
-       ]
-    };
-    setSelectedTransaction(transactionDetails);
-  };
+  const getQuantityClass = (qty: number) => qty > 0 ? 'qty-positive' : 'qty-negative';
+  const formatQuantity = (qty: number) => qty > 0 ? `+ ${qty}` : `- ${Math.abs(qty)}`;
 
-  // Simple filtering (mock implementation)
-  const filteredData = mockHistoryData.filter(item => {
-    const matchesSearch = item.product.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          item.staff.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesAction = actionFilter === 'Tất cả loại biến động' || item.action === actionFilter;
-    return matchesSearch && matchesAction;
-  });
-
-  const getActionBadgeClass = (action: string) => {
-    switch (action) {
-      case 'Nhập kho': return 'badge-import';
-      case 'Xuất kho': return 'badge-export';
-      case 'Bán hàng': return 'badge-sale';
-      default: return '';
-    }
-  };
-
-  const getQuantityClass = (qty: number) => {
-    return qty > 0 ? 'qty-positive' : 'qty-negative';
-  };
-
-  const formatQuantity = (qty: number) => {
-    return qty > 0 ? `+ ${qty}` : `- ${Math.abs(qty)}`;
+  const formatDateTime = (isoStr: string) => {
+    if (!isoStr) return '--';
+    const d = new Date(isoStr);
+    const time = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    const date = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return `${time} ${date}`;
   };
 
   return (
@@ -98,91 +128,68 @@ export default function InventoryHistoryPage() {
       <div className="history-sticky-header">
         <h1 className="history-title">LỊCH SỬ BIẾN ĐỘNG KHO</h1>
 
-        {/* Metrics Cards */}
+        {/* Metric Cards */}
         <div className="history-metrics-grid">
-        <div className="history-metric-card card-gray">
-          <div className="metric-card-title">Số lượng lượt biến động</div>
-          <div className="metric-card-value-container">
-            <span className="metric-value-number">4</span>
-            <span className="metric-value-unit">Lượt thao tác</span>
+          <div className="history-metric-card card-gray">
+            <div className="metric-card-title">Số lượng lượt biến động</div>
+            <div className="metric-card-value-container">
+              <span className="metric-value-number">{isLoading ? '--' : totalOperations}</span>
+              <span className="metric-value-unit">Lượt thao tác</span>
+            </div>
+            <div className="metric-card-footer" />
           </div>
-          <div className="metric-card-footer">
-            {/* <span>ⓘ Số giao dịch đã lọc theo điều kiện</span> */}
+
+          <div className="history-metric-card card-green">
+            <div className="metric-card-title">Tăng tồn kho</div>
+            <div className="metric-card-value-container">
+              <span className="metric-value-number">{isLoading ? '--' : `+ ${totalIncrease}`}</span>
+              <span className="metric-value-unit">Sản phẩm</span>
+            </div>
+            <div className="metric-card-footer" />
           </div>
-        </div>
-        
-        <div className="history-metric-card card-green">
-          <div className="metric-card-title">Tăng tồn kho</div>
-          <div className="metric-card-value-container">
-            <span className="metric-value-number">+ 40</span>
-            <span className="metric-value-unit">Sản phẩm</span>
-          </div>
-          <div className="metric-card-footer">
-            {/* <span style={{ color: '#2ea112' }}>↗ Hàng nhập kho</span> */}
+
+          <div className="history-metric-card card-red">
+            <div className="metric-card-title">Giảm tồn kho</div>
+            <div className="metric-card-value-container">
+              <span className="metric-value-number">{isLoading ? '--' : `- ${totalDecrease}`}</span>
+              <span className="metric-value-unit">Sản phẩm</span>
+            </div>
+            <div className="metric-card-footer" />
           </div>
         </div>
 
-        <div className="history-metric-card card-red">
-          <div className="metric-card-title">Giảm tồn kho</div>
-          <div className="metric-card-value-container">
-            <span className="metric-value-number">- 6</span>
-            <span className="metric-value-unit">Sản phẩm</span>
+        {/* Filters */}
+        <div className="history-filters-bar">
+          <div className="history-search-container">
+            <Search className="history-search-icon" size={18} />
+            <input
+              type="text"
+              className="history-search-input"
+              placeholder="Tìm sản phẩm, SKU, nhân viên, mã phiếu..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
-          <div className="metric-card-footer">
-            {/* <span style={{ color: '#dc3545' }}>↘ Khấu hao do bán hàng</span> */}
+
+          <div className="date-filter-group">
+            <span className="date-label">Từ:</span>
+            <input type="date" className="date-input" value={fromDate} max={toDate || todayStr} onChange={handleFromDateChange} />
           </div>
-        </div>
-      </div>
 
-      {/* Filters Bar */}
-      <div className="history-filters-bar">
-        <div className="history-search-container">
-          <Search className="history-search-icon" size={18} />
-          <input 
-            type="text" 
-            className="history-search-input" 
-            placeholder="Tìm sản phẩm, SKU, nhân viên,..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        
-        <div className="date-filter-group">
-          <span className="date-label">Từ:</span>
-          <input 
-            type="date" 
-            className="date-input" 
-            value={fromDate}
-            max={toDate}
-            onChange={handleFromDateChange}
-          />
-        </div>
-
-        <div className="date-filter-group">
-          <span className="date-label">Đến:</span>
-          <input 
-            type="date" 
-            className="date-input" 
-            value={toDate}
-            max={todayStr}
-            onChange={handleToDateChange}
-          />
-        </div>
-
-        <select 
-          className="history-type-select"
-          value={actionFilter}
-          onChange={(e) => setActionFilter(e.target.value)}
-        >
-          <option value="Tất cả loại biến động">Tất cả loại biến động</option>
-          <option value="Nhập kho">Nhập kho</option>
-          <option value="Xuất kho">Xuất kho</option>
-          <option value="Bán hàng">Bán hàng</option>
-        </select>
-
-          <div className="history-results-count">
-            {filteredData.length} kết quả
+          <div className="date-filter-group">
+            <span className="date-label">Đến:</span>
+            <input type="date" className="date-input" value={toDate} max={todayStr} onChange={handleToDateChange} />
           </div>
+
+          <select className="history-type-select" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>
+            <option value="ALL">Tất cả loại biến động</option>
+            <option value="IMPORT">Nhập kho</option>
+            <option value="EXPORT">Xuất kho</option>
+            <option value="SALE">Bán hàng</option>
+            <option value="ADJUSTMENT">Điều chỉnh</option>
+          </select>
+
+          <div className="history-results-count">{filteredRows.length} kết quả</div>
         </div>
       </div>
 
@@ -197,37 +204,44 @@ export default function InventoryHistoryPage() {
               <th style={{ width: '10%', textAlign: 'center' }}>Số Lượng</th>
               <th style={{ width: '14%', textAlign: 'center' }}>Biến Động</th>
               <th style={{ width: '14%', textAlign: 'center' }}>Nhân Viên</th>
-              <th style={{ width: '15%', textAlign: 'center' }}>Mã Tham Chiếu</th>
+              <th style={{ width: '15%', textAlign: 'center' }}>Mã Phiếu</th>
             </tr>
           </thead>
           <tbody>
-            {filteredData.length > 0 ? (
-              filteredData.map((item) => (
-                <tr key={item.id} onClick={() => handleRowClick(item)} className="history-table-row clickable-row">
-                  <td className="history-time">{item.time}</td>
+            {isLoading ? (
+              <tr><td colSpan={7} style={{ padding: '32px', textAlign: 'center', color: '#888' }}>Đang tải dữ liệu...</td></tr>
+            ) : filteredRows.length > 0 ? (
+              filteredRows.map((row, idx) => (
+                <tr key={`${row.transactionId}-${idx}`}
+                  onClick={() => setSelectedTransaction(row._transaction)}
+                  className="history-table-row clickable-row"
+                >
+                  <td className="history-time">{formatDateTime(row.createdAt)}</td>
                   <td>
-                    <div className="history-product-name">{item.product}</div>
-                    <div className="history-sku">{item.sku}</div>
+                    <div className="history-product-name">{row.productName}</div>
+                    <div className="history-sku">{row.productSku}</div>
                   </td>
                   <td style={{ textAlign: 'center' }}>
-                    <span className={`action-badge ${getActionBadgeClass(item.action)}`}>
-                      {item.action}
+                    <span className={`action-badge ${BADGE_CLASS[row.transactionType] || ''}`}>
+                      {TRANSACTION_TYPE_LABEL[row.transactionType] || row.transactionType}
                     </span>
                   </td>
-                  <td style={{ textAlign: 'center' }} className={getQuantityClass(item.quantity)}>
-                    {formatQuantity(item.quantity)}
+                  <td style={{ textAlign: 'center' }} className={getQuantityClass(row.quantity)}>
+                    {formatQuantity(row.quantity)}
                   </td>
                   <td style={{ textAlign: 'center' }} className="stock-change">
-                    {item.oldStock} → {item.newStock}
+                    {row.stockBefore} → {row.stockAfter}
                   </td>
-                  <td style={{ textAlign: 'center' }}>{item.staff}</td>
-                  <td style={{ textAlign: 'center' }} className="ref-code">{item.refCode}</td>
+                  <td style={{ textAlign: 'center' }}>{row.staffName}</td>
+                  <td style={{ textAlign: 'center' }} className="ref-code">{row.transactionCode}</td>
                 </tr>
               ))
             ) : (
               <tr>
                 <td colSpan={7} style={{ padding: '32px', textAlign: 'center', color: '#888' }}>
-                  Không có dữ liệu phù hợp với bộ lọc
+                  {transactions.length === 0
+                    ? 'Chưa có biến động kho nào trong khoảng thời gian này'
+                    : 'Không có dữ liệu phù hợp với bộ lọc'}
                 </td>
               </tr>
             )}
@@ -240,46 +254,47 @@ export default function InventoryHistoryPage() {
         <div className="import-modal-overlay">
           <div className="import-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="import-modal-header">
-              <h2>Chi tiết phiếu {selectedTransaction.refCode}</h2>
+              <h2>Chi tiết phiếu {selectedTransaction.transactionCode}</h2>
               <button className="import-modal-close" onClick={() => setSelectedTransaction(null)}>
                 <X size={24} color="#333" />
               </button>
             </div>
-            
+
             <div className="import-modal-body">
               {/* Left Pane */}
               <div className="import-modal-left">
                 <h3 className="pane-title">Thông tin chung</h3>
                 <div className="form-group">
                   <label>Mã Phiếu</label>
-                  <input type="text" value={selectedTransaction.refCode} disabled className="disabled-input" />
+                  <input type="text" value={selectedTransaction.transactionCode} disabled className="disabled-input" />
+                </div>
+                <div className="form-group">
+                  <label>Loại biến động</label>
+                  <input type="text"
+                    value={TRANSACTION_TYPE_LABEL[selectedTransaction.transactionType] || selectedTransaction.transactionType}
+                    disabled className="disabled-input" />
                 </div>
                 <div className="form-group">
                   <label>Người thực hiện</label>
-                  <input type="text" value={selectedTransaction.staff} disabled className="disabled-input" />
+                  <input type="text" value={selectedTransaction.createdBy?.name || '--'} disabled className="disabled-input" />
                 </div>
                 <div className="form-group">
                   <label>Thời gian</label>
-                  <input type="text" value={selectedTransaction.time} disabled className="disabled-input" />
+                  <input type="text" value={formatDateTime(selectedTransaction.createdAt)} disabled className="disabled-input" />
                 </div>
                 <div className="form-group">
                   <label>Ghi chú</label>
-                  <textarea 
-                    value={selectedTransaction.note}
-                    disabled
-                    rows={4}
-                    className="disabled-input"
-                  ></textarea>
+                  <textarea value={selectedTransaction.note || ''} disabled rows={4} className="disabled-input" />
                 </div>
               </div>
-              
-              {/* Vertical Divider */}
-              <div className="import-modal-divider"></div>
+
+              <div className="import-modal-divider" />
 
               {/* Right Pane */}
               <div className="import-modal-right">
-                <h3 className="pane-title">Danh sách sản phẩm ({selectedTransaction.action})</h3>
-                
+                <h3 className="pane-title">
+                  Danh sách sản phẩm ({TRANSACTION_TYPE_LABEL[selectedTransaction.transactionType] || selectedTransaction.transactionType})
+                </h3>
                 <div className="import-table-container">
                   <table className="import-table">
                     <thead>
@@ -290,36 +305,42 @@ export default function InventoryHistoryPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedTransaction.items.map((row: any, index: number) => (
-                        <tr key={index}>
-                          <td>
-                            <div style={{ fontWeight: 600, color: '#333' }}>{row.product}</div>
-                            <div style={{ fontSize: '12px', color: '#888' }}>{row.sku}</div>
-                          </td>
-                          <td style={{ textAlign: 'center' }} className={getQuantityClass(row.quantity)}>
-                            {formatQuantity(row.quantity)}
-                          </td>
-                          <td style={{ textAlign: 'center' }} className="stock-change">
-                            {row.oldStock} → {row.newStock}
+                      {selectedTransaction.items && selectedTransaction.items.length > 0 ? (
+                        selectedTransaction.items.map((item: any, index: number) => {
+                          const qty = Number(item.quantity);
+                          return (
+                            <tr key={index}>
+                              <td>
+                                <div style={{ fontWeight: 600, color: '#333' }}>{item.productName || '--'}</div>
+                                <div style={{ fontSize: '12px', color: '#888' }}>{item.productSku || '--'}</div>
+                              </td>
+                              <td style={{ textAlign: 'center' }} className={getQuantityClass(qty)}>
+                                {formatQuantity(qty)}
+                              </td>
+                              <td style={{ textAlign: 'center' }} className="stock-change">
+                                {Number(item.stockBefore)} → {Number(item.stockAfter)}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={3} style={{ textAlign: 'center', padding: '16px', color: '#888' }}>
+                            Không có sản phẩm trong phiếu này
                           </td>
                         </tr>
-                      ))}
+                      )}
                     </tbody>
                   </table>
                 </div>
 
                 <div className="import-actions" style={{ justifyContent: 'flex-end', marginTop: '24px' }}>
-                  <button 
-                    onClick={() => setSelectedTransaction(null)} 
-                    style={{ 
-                      backgroundColor: '#f1f1f1', 
-                      color: '#666', 
-                      border: 'none', 
-                      padding: '10px 24px',
-                      borderRadius: '8px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s'
+                  <button
+                    onClick={() => setSelectedTransaction(null)}
+                    style={{
+                      backgroundColor: '#f1f1f1', color: '#666', border: 'none',
+                      padding: '10px 24px', borderRadius: '8px', fontWeight: 600,
+                      cursor: 'pointer', transition: 'all 0.2s'
                     }}
                     onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#e2e2e2'}
                     onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#f1f1f1'}

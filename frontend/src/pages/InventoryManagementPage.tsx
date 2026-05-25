@@ -1,20 +1,23 @@
 import { useState, useRef, useEffect } from 'react';
 import { Search, X, ChevronDown } from 'lucide-react';
 import './InventoryManagementPage.css';
+import api from '../services/api';
+import { showToast } from '../components/Toast';
 
-const inventoryData = [
-  { id: 1, sku: 'SKU - RJSBDN', name: 'Cà phê sữa', category: 'Cà Phê', stock: 15, warningLimit: 10, status: 'An toàn', price: 25000 },
-  { id: 2, sku: 'SKU - BJKSBS', name: 'Trà ổi hồng', category: 'Trà', stock: 6, warningLimit: 10, status: 'Cảnh báo', price: 30000 },
-  { id: 3, sku: 'SKU - MDBJND', name: 'Bánh que', category: 'Ăn Vặt', stock: 0, warningLimit: 10, status: 'Hết hàng', price: 15000 },
-  { id: 4, sku: 'SKU - RJSBDN2', name: 'Cappuccino', category: 'Cà Phê', stock: 0, warningLimit: 10, status: 'Hết hàng', price: 19665 },
-  { id: 5, sku: 'SKU - RJSBDN3', name: 'Latte', category: 'Cà Phê', stock: 15, warningLimit: 10, status: 'An toàn', price: 22000 },
-  { id: 6, sku: 'SKU - RJSBDN4', name: 'Bạc xỉu', category: 'Cà Phê', stock: 15, warningLimit: 10, status: 'An toàn', price: 20000 },
-  { id: 7, sku: 'SKU - RJSBDN5', name: 'Cà phê đen', category: 'Cà Phê', stock: 15, warningLimit: 10, status: 'An toàn', price: 18000 },
-];
+export interface InventoryProduct {
+  id: string;
+  sku: string;
+  name: string;
+  category: string;
+  stock: number;
+  warningLimit: number;
+  status: string;
+  price: number;
+}
 
 interface ImportRow {
   id: string;
-  productId: number | null;
+  productId: string | null;
   quantity: number;
 }
 
@@ -23,9 +26,9 @@ const SearchableProductSelect = ({
   onChange, 
   products 
 }: { 
-  value: number | null; 
-  onChange: (productId: number | null) => void; 
-  products: typeof inventoryData;
+  value: string | null; 
+  onChange: (productId: string | null) => void; 
+  products: InventoryProduct[];
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -138,6 +141,45 @@ export default function InventoryManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Tất cả danh mục');
   const [statusFilter, setStatusFilter] = useState('Tất cả trạng thái kho');
+
+  const [inventoryData, setInventoryData] = useState<InventoryProduct[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    setIsLoading(true);
+    try {
+      const response = await api.get('/api/products');
+      const mappedData: InventoryProduct[] = response.data.map((p: any) => {
+        const stock = Number(p.currentStock || 0);
+        const warningLimit = Number(p.minimumStock || 5);
+        let status = 'An toàn';
+        if (stock === 0) status = 'Hết hàng';
+        else if (stock <= warningLimit) status = 'Cảnh báo';
+        
+        return {
+          id: p.id,
+          sku: p.sku || '--',
+          name: p.name,
+          category: p.categoryName || p.category?.name || 'Chưa phân loại',
+          stock: stock,
+          warningLimit: warningLimit,
+          status: status,
+          price: Number(p.priceTakeaway || 0)
+        };
+      });
+      setInventoryData(mappedData);
+    } catch (error) {
+      console.error('Error fetching inventory products:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
   
   // Transaction Modal State
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
@@ -148,9 +190,8 @@ export default function InventoryManagementPage() {
   const [rowToDelete, setRowToDelete] = useState<string | null>(null);
   const [isSingleImport, setIsSingleImport] = useState(false);
   
-  // Review Modal & Toast State
+  // Review Modal State
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
 
   const generateTicketCode = (type: 'import' | 'export') => {
     const date = new Date();
@@ -159,7 +200,7 @@ export default function InventoryManagementPage() {
     return `${type === 'import' ? 'INV' : 'EXV'} - ${dateStr} - ${random}`;
   };
 
-  const handleOpenTransactionModal = (type: 'import' | 'export', productId: number | null = null) => {
+  const handleOpenTransactionModal = (type: 'import' | 'export', productId: string | null = null) => {
     setTransactionType(type);
     setTransactionTicketCode(generateTicketCode(type));
     setTransactionRows([{ id: Date.now().toString(), productId: productId, quantity: 0 }]);
@@ -200,11 +241,39 @@ export default function InventoryManagementPage() {
     setIsReviewModalOpen(true);
   };
 
-  const handleConfirmSave = () => {
-    setIsReviewModalOpen(false);
-    setIsTransactionModalOpen(false);
-    setToastMessage(`Tạo phiếu ${transactionType === 'import' ? 'nhập' : 'xuất'} thành công!`);
-    setTimeout(() => setToastMessage(''), 3000);
+  const handleConfirmSave = async () => {
+    setIsLoading(true);
+    try {
+      const itemsToSubmit = transactionRows
+        .filter(r => r.productId && Number(r.quantity) > 0)
+        .map(r => ({
+          productId: r.productId,
+          quantity: Number(r.quantity)
+        }));
+
+      if (itemsToSubmit.length === 0) {
+        showToast('Vui lòng thêm ít nhất một sản phẩm!', 'error');
+        setIsLoading(false);
+        return;
+      }
+
+      await api.post('/api/inventory/transaction', {
+        type: transactionType,
+        note: transactionNote,
+        items: itemsToSubmit
+      });
+
+      await fetchProducts();
+
+      setIsReviewModalOpen(false);
+      setIsTransactionModalOpen(false);
+      showToast(`Tạo phiếu ${transactionType === 'import' ? 'nhập' : 'xuất'} thành công!`);
+    } catch (err) {
+      console.error('Error saving transaction:', err);
+      showToast('Lỗi khi lưu phiếu. Vui lòng thử lại.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleBackFromReview = () => {
@@ -635,13 +704,6 @@ export default function InventoryManagementPage() {
         </div>
       )}
 
-      {/* Toast */}
-      {toastMessage && (
-        <div className="toast-notification">
-          <div className="toast-icon">✓</div>
-          <div className="toast-text">{toastMessage}</div>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,16 +1,20 @@
 import { useState, useEffect } from 'react';
 import { cardAPI, productAPI } from '../services/api';
 import { AlertTriangle, Search } from 'lucide-react';
+import { showToast } from '../components/Toast';
 import './TableManagementPage.css';
+import { mapPosProduct, posUnitPrice, type PosProduct } from '../utils/posProduct';
+import { isItemPackage4h, rowBackground } from '../utils/orderItemDisplay';
 
 interface Card {
-  id: number;
-  cardNumber: string;
+  id: string;
+  cardNumber: string;  // extracted numeric part from cardCode
+  cardCode: string;    // original e.g. "CARD001"
   status: string;
 }
 
 interface CardSession {
-  id: number;
+  id: string;
   card: Card;
   startTime: string;
   endTime: string;
@@ -19,26 +23,16 @@ interface CardSession {
   status: string;
 }
 
-interface Category {
-  id: number;
-  name: string;
-}
+type Product = PosProduct;
 
-interface Product {
-  id: number;
-  sku: string;
-  name: string;
-  imageUrl: string | null;
-  status: string;
-  category: Category;
-}
-
-const INITIAL_PRODUCTS: Product[] = [
-  { id: 1, sku: 'CF-DEN-01', name: 'Cà phê đen', imageUrl: null, status: 'Đang bán', category: { id: 1, name: 'Cà phê' } },
-  { id: 2, sku: 'CF-SUA-02', name: 'Cà phê sữa', imageUrl: null, status: 'Đang bán', category: { id: 1, name: 'Cà phê' } },
-  { id: 3, sku: 'TS-DAC-01', name: 'Trà sữa đặc sản', imageUrl: null, status: 'Đang bán', category: { id: 2, name: 'Trà sữa' } },
-  { id: 4, sku: 'TS-TRU-02', name: 'Trà sữa truyền thống', imageUrl: null, status: 'Đang bán', category: { id: 2, name: 'Trà sữa' } }
-];
+const lineUnitPrice = (
+  item: { sku?: string; serveType: 'takeaway' | 'dine_in'; duration: '4h' | 'all_day'; price?: number },
+  allProducts: Product[],
+): number => {
+  const product = allProducts.find(p => p.sku === item.sku);
+  if (product) return posUnitPrice(product, item.serveType, item.duration);
+  return Number(item.price ?? 0);
+};
 
 const parseServerDate = (dateStr: string | null | undefined): Date => {
   if (!dateStr) return new Date();
@@ -66,14 +60,9 @@ const decodeOrderIdToItems = (orderId: string, allProducts: Product[]) => {
     
     const product = allProducts.find(p => p.sku === sku);
     if (!product) return null;
-    
-    let basePrice = 0;
-    if (serveType === 'takeaway') {
-      basePrice = 25000;
-    } else {
-      basePrice = duration === '4h' ? 35000 : 45000;
-    }
-    
+
+    const basePrice = posUnitPrice(product, serveType, duration);
+
     return {
       name: product.name,
       sku: product.sku,
@@ -88,7 +77,7 @@ const decodeOrderIdToItems = (orderId: string, allProducts: Product[]) => {
 export default function TableManagementPage() {
   const [cards, setCards] = useState<Card[]>([]);
   const [sessions, setSessions] = useState<CardSession[]>([]);
-  const [productList, setProductList] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [productList, setProductList] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -109,24 +98,7 @@ export default function TableManagementPage() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem('pos_orders_metadata');
-      let metadata = saved ? JSON.parse(saved) : {};
-      
-      const mockMetadata = {
-        'ORD-MOCK-04': {
-          itemCount: 1,
-          items: [
-            { name: 'Cà phê đen', sku: 'CF-DEN-01', serveType: 'dine_in', duration: '4h', quantity: 1, price: 35000, note: 'Ít đường' }
-          ]
-        },
-        'ORD-MOCK-08-1': {
-          itemCount: 2,
-          items: [
-            { name: 'Trà sữa truyền thống', sku: 'TS-TRU-02', serveType: 'dine_in', duration: '4h', quantity: 1, price: 35000 },
-            { name: 'Bánh gấu', sku: 'AV-BGAU-02', serveType: 'takeaway', duration: 'all_day', quantity: 1, price: 25000 }
-          ]
-        }
-      };
-      metadata = { ...mockMetadata, ...metadata };
+      const metadata = saved ? JSON.parse(saved) : {};
       setOrdersMetadata(metadata);
     } catch (e) {
       console.error(e);
@@ -147,69 +119,49 @@ export default function TableManagementPage() {
       ]);
 
       if (productsRes?.data) {
-        setProductList(productsRes.data);
+        setProductList(productsRes.data.map((p: Record<string, unknown>) => mapPosProduct(p)));
       }
       
-      const sortedCards = [...cardsRes.data].sort((a, b) => 
+      // Map cardCode (e.g. "CARD001") -> cardNumber (e.g. "01")
+      const mapCard = (c: any): Card => {
+        const numericPart = c.cardCode ? c.cardCode.replace(/^CARD0*/i, '') : String(c.id);
+        const cardNumber = numericPart.padStart(2, '0');
+        const statusMap: Record<string, string> = {
+          AVAILABLE: 'trống',
+          IN_USE: 'Đang sử dụng',
+          DISABLED: 'khóa',
+        };
+        return {
+          id: c.id,
+          cardCode: c.cardCode,
+          cardNumber,
+          status: statusMap[c.status] || c.status || 'trống',
+        };
+      };
+
+      const sortedCards = [...cardsRes.data].map(mapCard).sort((a, b) => 
         parseInt(a.cardNumber) - parseInt(b.cardNumber)
       );
       setCards(sortedCards);
+
+      // Map sessions - backend returns ServiceSession entity
+      const mapSession = (s: any): CardSession => ({
+        id: s.id,
+        card: mapCard(s.card),
+        startTime: s.startedAt || s.startTime,
+        endTime: s.expectedEndAt || s.endTime,
+        actualEndTime: s.actualEndAt || s.actualEndTime || null,
+        orderId: s.order?.orderCode || s.orderId || '',
+        status: s.status === 'ACTIVE' ? 'Đang sử dụng' : 'Hoàn thành',
+      });
       
-      const sortedSessions = [...sessionsRes.data].sort((a, b) => 
+      const sortedSessions = [...sessionsRes.data].map(mapSession).sort((a, b) => 
         parseServerDate(b.startTime).getTime() - parseServerDate(a.startTime).getTime()
       );
       setSessions(sortedSessions);
     } catch (err) {
       console.error(err);
-      setErrorMessage('Không thể kết nối đến máy chủ. Đang sử dụng dữ liệu giả lập.');
-      
-      setCards([
-        { id: 1, cardNumber: '04', status: 'quá giờ' },
-        { id: 2, cardNumber: '08', status: 'Đang sử dụng' },
-        { id: 3, cardNumber: '03', status: 'Đang sử dụng' },
-        { id: 4, cardNumber: '07', status: 'trống' },
-        { id: 5, cardNumber: '11', status: 'khóa' },
-      ]);
-
-      const now = new Date();
-      const start4 = new Date(now.getTime() - (4 * 60 * 60 + 2 * 60 + 43) * 1000);
-      const end4 = new Date(start4.getTime() + 4 * 60 * 60 * 1000); 
-      
-      const start8 = new Date(now.getTime() - (3 * 60 * 60 + 45 * 60 + 58) * 1000);
-      const end8 = new Date(start8.getTime() + 4 * 60 * 60 * 1000);
-
-      const start3 = new Date(now.getTime() - (5 * 60 + 17) * 1000);
-      const end3 = new Date(start3.getTime() + 4 * 60 * 60 * 1000);
-
-      setSessions([
-        {
-          id: 1,
-          card: { id: 1, cardNumber: '04', status: 'quá giờ' },
-          startTime: start4.toISOString(),
-          endTime: end4.toISOString(),
-          actualEndTime: null,
-          orderId: 'ORD-MOCK-04',
-          status: 'Quá giờ'
-        },
-        {
-          id: 2,
-          card: { id: 2, cardNumber: '08', status: 'Đang sử dụng' },
-          startTime: start8.toISOString(),
-          endTime: end8.toISOString(),
-          actualEndTime: null,
-          orderId: 'ORD-MOCK-08-1',
-          status: 'Đang sử dụng'
-        },
-        {
-          id: 3,
-          card: { id: 3, cardNumber: '03', status: 'Đang sử dụng' },
-          startTime: start3.toISOString(),
-          endTime: end3.toISOString(),
-          actualEndTime: null,
-          orderId: 'ORD-MOCK-03-1',
-          status: 'Đang sử dụng'
-        }
-      ]);
+      setErrorMessage('Không thể kết nối đến máy chủ. Vui lòng kiểm tra backend.');
     } finally {
       setLoading(false);
     }
@@ -233,9 +185,10 @@ export default function TableManagementPage() {
           ? { ...s, actualEndTime: new Date().toISOString(), status: 'Hoàn thành' }
           : s
       ));
+      showToast(`Trả thẻ #${releaseConfirmCard} thành công!`);
     } catch (err) {
       console.error(err);
-      alert('Không thể thực hiện trả thẻ. Vui lòng thử lại.');
+      showToast('Không thể thực hiện trả thẻ. Vui lòng thử lại.', 'error');
     }
   };
 
@@ -610,17 +563,20 @@ export default function TableManagementPage() {
                           }
                           return items.map((item, index) => {
                             const serveText = item.serveType === 'takeaway' ? 'Mang đi' : `Tại chỗ ${item.duration === '4h' ? '4 giờ' : 'cả ngày'}`;
-                            const unitPrice = item.serveType === 'takeaway' ? 25000 : (item.duration === '4h' ? 35000 : 45000);
-                            
+                            const unitPrice = lineUnitPrice(item, productList);
+                            const isPackage4h = isItemPackage4h(item);
+                            const bg = rowBackground(isPackage4h);
+                            const cellStyle = { backgroundColor: bg };
+
                             return (
-                              <tr key={index}>
-                                <td>
+                              <tr key={index} className={isPackage4h ? 'row-package-4h' : undefined}>
+                                <td style={cellStyle}>
                                   <div style={{ fontWeight: 600, fontSize: '14px', color: '#111' }}>{item.name}</div>
                                   <div style={{ fontSize: '12px', color: '#333', marginTop: '4px' }}>{serveText}</div>
                                 </td>
-                                <td style={{ textAlign: 'right', fontSize: '13px' }}>{unitPrice.toLocaleString('vi-VN')}đ</td>
-                                <td style={{ textAlign: 'center', fontSize: '13px' }}>{String(item.quantity).padStart(2, '0')}</td>
-                                <td style={{ textAlign: 'right', fontSize: '13px', fontWeight: 'bold' }}>
+                                <td style={{ ...cellStyle, textAlign: 'right', fontSize: '13px' }}>{unitPrice.toLocaleString('vi-VN')}đ</td>
+                                <td style={{ ...cellStyle, textAlign: 'center', fontSize: '13px' }}>{String(item.quantity).padStart(2, '0')}</td>
+                                <td style={{ ...cellStyle, textAlign: 'right', fontSize: '13px', fontWeight: 'bold' }}>
                                   {(unitPrice * item.quantity).toLocaleString('vi-VN')}đ
                                 </td>
                               </tr>
@@ -643,7 +599,7 @@ export default function TableManagementPage() {
                         items = metadata?.items || [];
                       }
                       const total = items.reduce((sum, item) => {
-                        const unitPrice = item.serveType === 'takeaway' ? 25000 : (item.duration === '4h' ? 35000 : 45000);
+                        const unitPrice = lineUnitPrice(item, productList);
                         return sum + (unitPrice * item.quantity);
                       }, 0);
                       return total > 0 ? `${total.toLocaleString('vi-VN')}đ` : 'Chưa tính';

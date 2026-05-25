@@ -1,268 +1,351 @@
-# Thiết Kế Cơ Sở Dữ Liệu - ViePOS F&B Management System
+// ===============================
+// ViePOS Database Design
+// ===============================
 
-Dựa trên các chức năng của hệ thống (dành cho Admin và Nhân viên phục vụ POS), cơ sở dữ liệu được thiết kế thành các cụm module: **Người dùng & Xác thực**, **Thực đơn & Hàng hóa**, **Bàn & Đơn hàng**, **Quản lý Kho**, và **Audit Log (Lưu vết hệ thống)**.
+Table USERS {
+  id uuid [pk]
+  employee_id varchar(50) [unique, not null]
+  email varchar(255) [unique, not null]
+  password varchar(255) [not null]
+  avatar_url text
+  pin_change_count int [not null, default: 0]
+  last_login_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp
+  deleted_at timestamp
+  failed_login_attempts int [not null, default: 0]
+  lockout_until timestamp
+}
 
-## 1. Sơ đồ thực thể liên kết (ER Diagram)
+Table EMPLOYEES {
+  id uuid [pk]
+  employee_id varchar(50) [unique, not null]
+  full_name varchar(255) [not null]
+  personal_email varchar(255) [unique, not null]
+  phone varchar(20) [unique, not null]
+  hire_date date
+  end_date date
+  status enum("ACTIVE", "RESIGNED") [not null]
+  role enum("STAFF", "ADMIN", "ROOT_ADMIN") [not null]
+  is_active boolean [not null, default: true]
+  is_locked boolean [not null, default: false]
+}
 
-```mermaid
-erDiagram
-    %% Mối quan hệ
-    USERS ||--o{ CARDS : "sở hữu"
-    USERS ||--o{ CARD_SESSIONS : "đăng nhập"
-    CARDS ||--o{ CARD_SESSIONS : "tạo ra"
-    USERS ||--o{ PIN_REQUESTS : "yêu cầu"
-    
-    CATEGORIES ||--o{ PRODUCTS : "chứa"
-    
-    TABLES ||--o{ ORDERS : "có"
-    USERS ||--o{ ORDERS : "tạo/phụ trách"
-    ORDERS ||--|{ ORDER_ITEMS : "bao gồm"
-    PRODUCTS ||--o{ ORDER_ITEMS : "chi tiết của"
-    
-    PRODUCTS ||--o{ INVENTORY_TRANSACTIONS : "có lịch sử"
-    USERS ||--o{ INVENTORY_TRANSACTIONS : "thực hiện"
-    
-    USERS ||--o{ AUDIT_LOGS : "gây ra (hành động)"
+Table ACCOUNT_REQUESTS {
+  id uuid [pk]
+  request_code varchar(50) [unique, not null]
+  request_type enum("REGISTER", "CHANGE_PIN", "RESET_PIN") [not null]
 
-    %% Định nghĩa các bảng
-    USERS {
-        uuid id PK
-        string name
-        string email UK
-        string password
-        string role
-        string phone
-        string status
-        boolean email_verified
-        datetime created_at
-        datetime updated_at
-    }
+  employee_id varchar(50)
 
-    CARDS {
-        uuid id PK
-        string rfid_uid UK
-        uuid user_id FK
-        string status
-        datetime assigned_at
-    }
+  request_full_name varchar(255)
+  request_email varchar(255)
+  request_phone varchar(20)
 
-    CARD_SESSIONS {
-        uuid id PK
-        uuid card_id FK
-        uuid user_id FK
-        string pos_device_id
-        datetime login_time
-        datetime logout_time
-        string status
-    }
+  request_pin_hash varchar(255) [not null]
 
-    PIN_REQUESTS {
-        uuid id PK
-        uuid user_id FK
-        string request_type
-        string status
-        datetime requested_at
-        datetime resolved_at
-    }
+  status enum("PENDING", "APPROVED", "REJECTED") [not null]
 
-    CATEGORIES {
-        bigint id PK
-        string name
-        string description
-    }
+  approved_by varchar(50)
 
-    PRODUCTS {
-        bigint id PK
-        string sku UK
-        string name
-        string image_url
-        string status
-        decimal price
-        string unit
-        decimal current_stock
-        decimal minimum_stock
-        decimal cost_price
-        bigint category_id FK
-    }
+  approved_at timestamp
+  rejected_reason text
 
-    TABLES {
-        bigint id PK
-        string name
-        int capacity
-        string status
-        datetime created_at
-    }
+  created_at timestamp [not null]
+}
 
-    ORDERS {
-        uuid id PK
-        bigint table_id FK
-        uuid user_id FK
-        decimal total_amount
-        decimal discount
-        decimal tax
-        string status
-        string payment_method
-        datetime created_at
-        datetime updated_at
-    }
+Table CATEGORIES {
+  id uuid [pk]
 
-    ORDER_ITEMS {
-        uuid id PK
-        uuid order_id FK
-        bigint product_id FK
-        int quantity
-        decimal unit_price
-        string note
-        string status
-    }
+  category_code varchar(50) [unique, not null]
 
-    INVENTORY_TRANSACTIONS {
-        uuid id PK
-        bigint product_id FK
-        uuid user_id FK
-        string transaction_type
-        decimal quantity
-        string reference_note
-        datetime created_at
-    }
+  name varchar(255) [unique, not null]
 
-    AUDIT_LOGS {
-        uuid id PK
-        uuid user_id FK
-        string action
-        string entity_type
-        string entity_id
-        jsonb old_value
-        jsonb new_value
-        string ip_address
-        string user_agent
-        datetime created_at
-    }
-```
+  description text
 
----
+  image_url text
 
-## 2. Chi tiết các bảng (Tables Details)
+  default_price_takeaway decimal(15,2) [not null]
+  default_price_package_4h decimal(15,2) [not null]
+  default_price_package_fullday decimal(15,2) [not null]
 
-### 2.1. Module Người dùng & Xác thực (Users & Auth)
+  display_order int [not null, default: 0]
 
-**Bảng `users`** (Tài khoản nhân viên, admin)
-- `id` (UUID, PK): Mã người dùng.
-- `name` (String): Tên hiển thị.
-- `email` (String, UK): Email đăng nhập.
-- `password` (String): Mật khẩu băm (Hashed password).
-- `role` (Enum): Vai trò (VD: `ADMIN`, `MANAGER`, `STAFF`).
-- `phone` (String): Số điện thoại.
-- `status` (Enum): Trạng thái (VD: `PENDING`, `ACTIVE`, `BLOCKED`).
-- `email_verified` (Boolean): Xác nhận email.
-- `created_at`, `updated_at` (Timestamp).
+  is_active boolean [not null, default: true]
 
-**Bảng `cards`** (Thẻ RFID/NFC cho nhân viên POS)
-- `id` (UUID, PK): Mã quản lý thẻ.
-- `rfid_uid` (String, UK): Mã định danh chip RFID/NFC đọc được từ phần cứng.
-- `user_id` (UUID, FK): Nhân viên được cấp thẻ.
-- `status` (Enum): `ACTIVE`, `LOST`, `REVOKED`.
-- `assigned_at` (Timestamp): Ngày cấp.
+  created_at timestamp [not null]
+  updated_at timestamp
+}
 
-**Bảng `card_sessions`** (Phiên đăng nhập tại máy POS)
-- `id` (UUID, PK): ID phiên bản.
-- `card_id` (UUID, FK): Thẻ được dùng.
-- `user_id` (UUID, FK): Nhân viên tương ứng.
-- `pos_device_id` (String): Định danh của thiết bị tính tiền (Tablet/POS).
-- `login_time` (Timestamp): Thời gian quẹt thẻ vào ca.
-- `logout_time` (Timestamp): Thời gian quẹt thẻ ra ca.
-- `status` (Enum): `ACTIVE`, `COMPLETED`.
+Table PRODUCTS {
+  id uuid [pk]
 
-**Bảng `pin_requests`** (Yêu cầu đổi mã PIN dành cho thẻ POS)
-- `id` (UUID, PK).
-- `user_id` (UUID, FK).
-- `request_type` (Enum): `CHANGE`, `RESET`.
-- `status` (Enum): `PENDING`, `APPROVED`, `REJECTED`.
-- `requested_at`, `resolved_at` (Timestamp).
+  product_code varchar(50) [unique, not null]
 
-### 2.2. Module Thực đơn (Menu / Catalog)
+  sku varchar(100) [unique]
 
-**Bảng `categories`** (Danh mục món)
-- `id` (BigInt, PK).
-- `name` (String): Tên danh mục (VD: Cà phê, Trà sữa).
-- `description` (String): Mô tả.
+  category_id uuid [not null]
 
-**Bảng `products`** (Sản phẩm/Thành phẩm)
-- `id` (BigInt, PK).
-- `sku` (String, UK): Mã sản phẩm (Mã vạch).
-- `name` (String): Tên sản phẩm.
-- `image_url` (String): Link ảnh minh họa.
-- `status` (String): Trạng thái ("Đang bán", "Dừng bán").
-- `price` (Decimal): Giá bán hiện tại.
-- `unit` (String): Đơn vị tính (VD: cái, chai, lon).
-- `current_stock` (Decimal): Tồn kho hiện tại.
-- `minimum_stock` (Decimal): Tồn kho tối thiểu (Cảnh báo khi sắp hết).
-- `cost_price` (Decimal): Giá vốn trung bình nhập vào.
-- `category_id` (BigInt, FK): Thuộc danh mục nào.
+  name varchar(255) [not null]
 
-### 2.3. Module Bàn & Đơn hàng (Tables & Orders)
+  short_name varchar(100)
 
-**Bảng `tables`** (Quản lý khu vực bàn)
-- `id` (BigInt, PK).
-- `name` (String): Tên bàn (VD: Bàn 1, Bàn 2, T1-01).
-- `capacity` (Int): Số chỗ ngồi.
-- `status` (Enum): `AVAILABLE` (Trống), `OCCUPIED` (Có khách), `RESERVED` (Đã đặt).
+  description text
 
-**Bảng `orders`** (Đơn hàng)
-- `id` (UUID, PK): Mã đơn hàng.
-- `table_id` (BigInt, FK): Đơn hàng thuộc bàn nào (có thể null nếu mua mang đi/Takeaway).
-- `user_id` (UUID, FK): Nhân viên phục vụ/tạo đơn.
-- `total_amount` (Decimal): Tổng tiền cần thanh toán.
-- `discount` (Decimal): Tiền giảm giá.
-- `tax` (Decimal): Thuế VAT.
-- `status` (Enum): `PENDING` (Đang chọn món), `PROCESSING` (Đang chế biến), `COMPLETED` (Đã thanh toán), `CANCELLED` (Hủy).
-- `payment_method` (Enum): `CASH`, `CREDIT_CARD`, `MOMO`, `BANK_TRANSFER`.
-- `created_at`, `updated_at` (Timestamp).
+  image_url text
 
-**Bảng `order_items`** (Chi tiết các món trong 1 đơn hàng)
-- `id` (UUID, PK).
-- `order_id` (UUID, FK): Thuộc đơn hàng nào.
-- `product_id` (BigInt, FK): Sản phẩm nào.
-- `quantity` (Int): Số lượng.
-- `unit_price` (Decimal): Giá tại thời điểm đặt (để tránh thay đổi giá gốc làm sai lệch lịch sử).
-- `note` (String): Ghi chú của khách (VD: "Ít đá", "Không đường").
-- `status` (Enum): `PREPARING` (Đang làm), `READY` (Xong), `DELIVERED` (Đã giao khách).
+  cost_price decimal(15,2) [not null]
 
-### 2.4. Module Quản lý Kho (Inventory)
+  price_takeaway decimal(15,2) [not null]
 
-*(Hệ thống nhập trực tiếp thành phẩm về để bán, không quản lý nguyên liệu rời)*
+  price_package_4h decimal(15,2) [not null]
 
-**Bảng `inventory_transactions`** (Lịch sử Nhập/Xuất/Kiểm kho)
-- `id` (UUID, PK).
-- `product_id` (BigInt, FK): Mã sản phẩm.
-- `user_id` (UUID, FK): Người thực hiện thao tác (quản lý kho).
-- `transaction_type` (Enum): `IMPORT` (Nhập), `EXPORT` (Xuất), `ADJUSTMENT` (Điều chỉnh kiểm kho), `SALE_DEDUCTION` (Trừ tự động khi bán hàng).
-- `quantity` (Decimal): Số lượng thay đổi (dương hoặc âm).
-- `reference_note` (String): Mã phiếu hoặc ghi chú (VD: "Nhập hàng từ NCC A").
-- `created_at` (Timestamp).
+  price_package_fullday decimal(15,2) [not null]
 
-### 2.5. Lịch sử Hệ thống (Audit Log)
+  is_custom_price boolean [not null, default: false]
 
-*Hệ thống cần theo dõi mọi thao tác quan trọng (thêm, sửa, xóa, cấp quyền, hủy đơn, nhập kho) nhằm mục đích bảo mật, truy vết.*
+  service_price_updated_at timestamp
 
-**Bảng `audit_logs`**
-- `id` (UUID, PK).
-- `user_id` (UUID, FK): Người dùng thực hiện thao tác (Tài khoản admin/staff).
-- `action` (String): Tên hành động (VD: `CREATE_USER`, `DELETE_PRODUCT`, `CANCEL_ORDER`, `UPDATE_INVENTORY`).
-- `entity_type` (String): Tên bảng bị tác động (VD: `users`, `products`, `orders`).
-- `entity_id` (String): ID của bản ghi bị tác động (lưu String để có thể chứa cả UUID và BigInt).
-- `old_value` (JSONB): Trạng thái dữ liệu *trước* khi sửa/xóa.
-- `new_value` (JSONB): Trạng thái dữ liệu *sau* khi thêm/sửa.
-- `ip_address` (String): Địa chỉ IP thực hiện.
-- `user_agent` (String): Trình duyệt / Thiết bị.
-- `created_at` (Timestamp): Thời gian thực hiện.
+  unit varchar(50) [not null]
 
----
+  current_stock decimal(15,2) [not null, default: 0]
 
-## 3. Các ràng buộc và chính sách dữ liệu (Data Integrity)
+  minimum_stock decimal(15,2) [not null]
 
-1. **Ràng buộc khóa ngoại (Foreign Keys):** 
-   - Hầu hết các ràng buộc nên cài đặt quy tắc `ON DELETE RESTRICT` (Không cho xóa nếu có dữ liệu phụ thuộc) để đảm bảo lịch sử đơn hàng, kho không bị mất mát khi lỡ tay xóa một sản phẩm hay một nhân viên.
-   - Đối với tài khoản hoặc sản phẩm ngừng kinh doanh, dùng phương pháp **Soft Delete** (Cập nhật cột `status = 'INACTIVE'` hoặc `status = 'Dừng bán'`).
-2. **Audit Log Tự động:** Các Trigger tại Database hoặc Middleware tại Backend sẽ tự động bắt sự kiện Insert/Update/Delete tại các bảng cấu hình để lưu vào `audit_logs`.
-3. **Transaction Kho:** Khi trạng thái Order đổi sang `COMPLETED`, backend sẽ tự động dựa vào `order_items` để insert vào `inventory_transactions` với `type = 'SALE_DEDUCTION'` và trừ `current_stock` trực tiếp trên bảng `products`.
+  is_active boolean [not null, default: true]
+
+  is_out_of_stock boolean [not null, default: false]
+
+  preparation_time int
+
+  created_at timestamp [not null]
+
+  updated_at timestamp
+}
+
+Table SERVICE_CARDS {
+  id uuid [pk]
+
+  card_code varchar(50) [unique, not null]
+
+  rfid_uid varchar(100) [unique]
+
+  card_type enum("PHYSICAL", "QR", "NFC") [not null]
+
+  status enum("AVAILABLE", "IN_USE", "DISABLED") [not null]
+
+  note text
+
+  created_at timestamp [not null]
+
+  updated_at timestamp
+}
+
+Table SERVICE_SESSIONS {
+  id uuid [pk]
+
+  session_code varchar(50) [unique, not null]
+
+  card_id uuid [not null]
+
+  order_id uuid [unique, not null]
+
+  created_by uuid [not null]
+
+  service_type enum("PACKAGE_4H", "FULLTIME") [not null]
+
+  started_at timestamp [not null]
+
+  expected_end_at timestamp
+
+  actual_end_at timestamp
+
+  status enum("ACTIVE", "COMPLETED") [not null]
+
+  note text
+
+  updated_at timestamp
+}
+
+Table ORDERS {
+  id uuid [pk]
+
+  order_code varchar(50) [unique, not null]
+
+  session_id uuid
+
+  created_by varchar(50) [not null]
+
+  subtotal_amount decimal(12,2) [not null]
+
+  discount_amount decimal(12,2) [not null, default: 0]
+
+  tax_amount decimal(12,2) [not null, default: 0]
+
+  total_amount decimal(12,2) [not null]
+
+  note text
+
+  status enum("COMPLETED", "CANCELLED") [not null]
+
+  completed_at timestamp
+
+  created_at timestamp [not null]
+}
+
+Table ORDER_ITEMS {
+  id uuid [pk]
+
+  order_id uuid [not null]
+
+  product_id uuid [not null]
+
+  service_type enum("TAKEAWAY", "FOUR_HOURS", "FULL_DAY") [not null]
+
+  quantity int [not null]
+
+  unit_price decimal(12,2) [not null]
+
+  line_total decimal(12,2) [not null]
+
+  note text
+}
+
+Table PAYMENTS {
+  id uuid [pk]
+
+  payment_code varchar(50) [unique, not null]
+
+  order_id uuid [not null]
+
+  payment_method enum("CASH", "BANK_TRANSFER") [not null]
+
+  amount decimal(12,2) [not null]
+
+  transfer_proof_image_url text
+
+  paid_at timestamp
+}
+
+Table INVENTORY_TRANSACTIONS {
+  id uuid [pk]
+
+  inven_transaction_id uuid [not null]
+
+  product_id uuid [not null]
+
+  transaction_type enum("IMPORT", "SALE", "ADJUSTMENT", "DAMAGE") [not null]
+
+  reference_id uuid
+
+  created_by uuid [not null]
+
+  note text
+
+  created_at timestamp [not null]
+}
+
+Table INVENTORY_ITEMS {
+  id uuid [pk]
+
+  inven_transaction_id uuid [not null]
+
+  product_id uuid [not null]
+
+  quantity decimal(15,2) [not null]
+
+  unit_cost decimal(15,2) [not null]
+
+  stock_before decimal(15,2) [not null]
+
+  stock_after decimal(15,2) [not null]
+}
+
+Table AUDIT_LOGS {
+  id uuid [pk]
+
+  audit_code varchar(50) [unique, not null]
+
+  user_id uuid
+
+  action enum(
+    "CREATE",
+    "UPDATE",
+    "DELETE",
+    "LOGIN",
+    "LOGOUT",
+    "APPROVE",
+    "REJECT"
+  ) [not null]
+
+  entity_type varchar(100) [not null]
+
+  entity_id uuid [not null]
+
+  old_values jsonb
+
+  new_values jsonb
+
+  changed_fields jsonb
+
+  action_source enum("ADMIN", "POS", "SYSTEM", "API")
+
+  ip_address varchar(100)
+
+  device_info text
+
+  note text
+
+  created_at timestamp [not null]
+}
+
+// ===============================
+// RELATIONSHIPS
+// ===============================
+
+// USERS ↔ EMPLOYEES
+Ref: USERS.employee_id > EMPLOYEES.employee_id
+
+// ACCOUNT REQUESTS
+Ref: ACCOUNT_REQUESTS.employee_id > EMPLOYEES.employee_id
+Ref: ACCOUNT_REQUESTS.approved_by > EMPLOYEES.employee_id
+
+// PRODUCTS ↔ CATEGORIES
+Ref: PRODUCTS.category_id > CATEGORIES.id
+
+// SERVICE SESSIONS
+Ref: SERVICE_SESSIONS.card_id > SERVICE_CARDS.id
+Ref: SERVICE_SESSIONS.created_by > USERS.id
+Ref: SERVICE_SESSIONS.order_id - ORDERS.id
+
+// ORDERS
+Ref: ORDERS.session_id > SERVICE_SESSIONS.id
+Ref: ORDERS.created_by > EMPLOYEES.employee_id
+
+// ORDER ITEMS
+Ref: ORDER_ITEMS.order_id > ORDERS.id
+Ref: ORDER_ITEMS.product_id > PRODUCTS.id
+
+// PAYMENTS
+Ref: PAYMENTS.order_id > ORDERS.id
+
+// INVENTORY TRANSACTIONS
+Ref: INVENTORY_TRANSACTIONS.product_id > PRODUCTS.id
+Ref: INVENTORY_TRANSACTIONS.created_by > USERS.id
+
+// INVENTORY ITEMS
+Ref: INVENTORY_ITEMS.inven_transaction_id > INVENTORY_TRANSACTIONS.id
+Ref: INVENTORY_ITEMS.product_id > PRODUCTS.id
+
+// AUDIT LOGS
+Ref: AUDIT_LOGS.user_id > USERS.id
+
+// OPTIONAL SOFT REFERENCES
+// inventory_transactions.reference_id
+// Có thể tham chiếu:
+// - orders.id khi transaction_type = SALE
+// - inventory_transactions.id khác nếu cần adjustment chain
+
+Ref: "CATEGORIES"."id" < "ACCOUNT_REQUESTS"."id"
+
+Ref: "INVENTORY_TRANSACTIONS"."id" < "INVENTORY_TRANSACTIONS"."created_by"

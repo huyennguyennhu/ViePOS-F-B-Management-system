@@ -311,7 +311,7 @@
 
 .payment-line {
   height: 1px;
-  background-color: #86efac;
+  background-color: #5FC63E;
   margin: 6px 0;
   position: relative;
 }
@@ -327,6 +327,12 @@
 /* Payment Chart */
 .payment-chart-container {
   width: 100%;
+  min-height: 180px;
+}
+
+.payment-legend {
+  margin-top: 8px;
+  padding: 0 8px 8px;
 }
 
 /* Table Section */
@@ -584,4 +590,12 @@
   font-size: 18px;
   font-weight: 700;
   color: #d32f2f;
+}
+
+.chart-empty-hint {
+  text-align: center;
+  color: #888;
+  font-size: 13px;
+  padding: 24px 16px;
+  margin: 0;
 }

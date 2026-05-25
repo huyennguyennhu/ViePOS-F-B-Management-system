@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
+import { canAccessManagement } from '../utils/auth';
 import xGreyIcon from '../../assets/icon/x_grey.png';
 import closeEyeIcon from '../../assets/icon/close_eye_grey.png';
 import openEyeIcon from '../../assets/icon/open_eye_grey.png';
@@ -14,6 +15,13 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Chỉ tự chuyển dashboard nếu đã đăng nhập Quản lý; nhân viên (POS) vẫn xem được form đăng nhập Quản lý
+  useEffect(() => {
+    if (canAccessManagement()) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [navigate]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
@@ -25,8 +33,12 @@ export default function LoginPage() {
       localStorage.setItem('staffEmail', email);
       if (res.data.name) localStorage.setItem('staffName', res.data.name);
       navigate('/dashboard');
-    } catch {
-      setError('Email hoặc mật khẩu không đúng.');
+    } catch (err: any) {
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        setError('Email hoặc mật khẩu không đúng.');
+      } else {
+        setError('Có lỗi xảy ra, vui lòng thử lại sau.');
+      }
     } finally {
       setLoading(false);
     }

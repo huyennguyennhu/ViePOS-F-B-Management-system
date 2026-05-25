@@ -1,38 +1,62 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, CheckCircle2, AlertTriangle, XCircle, X } from 'lucide-react';
+import api from '../services/api';
 import './PosOrdersPage.css';
 import './PosTablesPage.css';
 
-// Mock data based on the screenshot
-const mockInventory = [
-  { id: 1, name: 'Cà phê sữa', category: 'Cà Phê', stock: 15, status: 'safe' },
-  { id: 2, name: 'Cà phê sữa', category: 'Cà Phê', stock: 3, status: 'warning' },
-  { id: 3, name: 'Cà phê sữa', category: 'Cà Phê', stock: 15, status: 'safe' },
-  { id: 4, name: 'Cà phê sữa', category: 'Cà Phê', stock: 0, status: 'danger' },
-  { id: 5, name: 'Cà phê sữa', category: 'Cà Phê', stock: 15, status: 'safe' },
-  { id: 6, name: 'Cà phê sữa', category: 'Cà Phê', stock: 15, status: 'safe' },
-  { id: 7, name: 'Cà phê sữa', category: 'Cà Phê', stock: 15, status: 'safe' },
-  { id: 8, name: 'Cà phê sữa', category: 'Cà Phê', stock: 15, status: 'safe' },
-];
+const LOW_STOCK_THRESHOLD = 5; // fallback nếu minimumStock = 0
 
 export default function PosOrdersPage() {
+  const [inventory, setInventory] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
 
-  const safeCount = mockInventory.filter(i => i.status === 'safe').length;
-  const warningCount = mockInventory.filter(i => i.status === 'warning').length;
-  const dangerCount = mockInventory.filter(i => i.status === 'danger').length;
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const res = await api.get('/api/products');
+        const mapped = res.data
+          .filter((p: any) => p.isActive)
+          .map((p: any) => {
+            // Backend field: currentStock (BigDecimal → number)
+            const stock = Number(p.currentStock ?? p.stockQuantity ?? p.stock ?? 0);
+            // Dùng minimumStock từ DB nếu có, fallback về LOW_STOCK_THRESHOLD
+            const minStock = Number(p.minimumStock ?? LOW_STOCK_THRESHOLD);
+            const threshold = minStock > 0 ? minStock : LOW_STOCK_THRESHOLD;
+
+            let status = 'safe';
+            if (stock === 0) status = 'danger';
+            else if (stock <= threshold) status = 'warning';
+            return {
+              id: p.id,
+              name: p.name,
+              category: p.categoryName || p.category?.name || 'Chưa phân loại',
+              stock,
+              status,
+            };
+          });
+        setInventory(mapped);
+      } catch (err) {
+        console.error('Error fetching products:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchProducts();
+  }, []);
+
+
+  const safeCount = inventory.filter(i => i.status === 'safe').length;
+  const warningCount = inventory.filter(i => i.status === 'warning').length;
+  const dangerCount = inventory.filter(i => i.status === 'danger').length;
 
   const handleCardClick = (status: string) => {
-    if (selectedStatus === status) {
-      setSelectedStatus(null);
-    } else {
-      setSelectedStatus(status);
-    }
+    setSelectedStatus(prev => prev === status ? null : status);
   };
 
-  const filteredInventory = mockInventory.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+  const filteredInventory = inventory.filter(item => {
+    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           item.category.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = selectedStatus ? item.status === selectedStatus : true;
     return matchesSearch && matchesStatus;
@@ -40,14 +64,10 @@ export default function PosOrdersPage() {
 
   const renderStatusBadge = (status: string) => {
     switch (status) {
-      case 'safe':
-        return <CheckCircle2 size={20} color="#3b9016" />;
-      case 'warning':
-        return <AlertTriangle size={20} color="#f59e0b" />;
-      case 'danger':
-        return <XCircle size={20} color="#dc2626" />;
-      default:
-        return null;
+      case 'safe':    return <CheckCircle2 size={20} color="#3b9016" />;
+      case 'warning': return <AlertTriangle size={20} color="#f59e0b" />;
+      case 'danger':  return <XCircle size={20} color="#dc2626" />;
+      default:        return null;
     }
   };
 
@@ -62,49 +82,34 @@ export default function PosOrdersPage() {
         <div className="pos-inventory-search-input-wrapper">
           <div className="pos-inventory-search-box">
             <Search size={18} color="#999" />
-            <input 
-              type="text" 
-              placeholder="Tìm kiếm..." 
+            <input
+              type="text"
+              placeholder="Tìm kiếm..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
             {searchTerm && (
-              <button 
-                className="clear-search-btn" 
-                onClick={() => setSearchTerm('')}
-              >
+              <button className="clear-search-btn" onClick={() => setSearchTerm('')}>
                 <X size={16} color="#999" />
               </button>
             )}
           </div>
-          {/* <button className="filter-btn">
-            <SlidersHorizontal size={18} color="#fff" />
-          </button> */}
         </div>
       </div>
 
       {/* Cards */}
       <div className={`pos-inventory-cards ${selectedStatus ? 'has-filter' : ''}`}>
-        <div 
-          className={`inv-card safe-card ${selectedStatus === 'safe' ? 'active' : ''}`}
-          onClick={() => handleCardClick('safe')}
-        >
+        <div className={`inv-card safe-card ${selectedStatus === 'safe' ? 'active' : ''}`} onClick={() => handleCardClick('safe')}>
           <div className="inv-card-icon"><CheckCircle2 size={16} /></div>
           <div className="inv-card-title">Tồn kho an toàn</div>
           <div className="inv-card-number">{safeCount}</div>
         </div>
-        <div 
-          className={`inv-card warning-card ${selectedStatus === 'warning' ? 'active' : ''}`}
-          onClick={() => handleCardClick('warning')}
-        >
+        <div className={`inv-card warning-card ${selectedStatus === 'warning' ? 'active' : ''}`} onClick={() => handleCardClick('warning')}>
           <div className="inv-card-icon"><AlertTriangle size={16} /></div>
           <div className="inv-card-title">Cảnh báo tồn kho</div>
           <div className="inv-card-number">{warningCount}</div>
         </div>
-        <div 
-          className={`inv-card danger-card ${selectedStatus === 'danger' ? 'active' : ''}`}
-          onClick={() => handleCardClick('danger')}
-        >
+        <div className={`inv-card danger-card ${selectedStatus === 'danger' ? 'active' : ''}`} onClick={() => handleCardClick('danger')}>
           <div className="inv-card-icon"><XCircle size={16} /></div>
           <div className="inv-card-title">Hết hàng</div>
           <div className="inv-card-number">{dangerCount}</div>
@@ -124,16 +129,20 @@ export default function PosOrdersPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredInventory.map((item, idx) => (
-                <tr key={`${item.id}-${idx}`} className="pos-inventory-row">
-                  <td className="inv-td inv-td-name">{item.name}</td>
-                  <td className="inv-td inv-td-category">{item.category}</td>
-                  <td className="inv-td inv-td-stock">{item.stock}</td>
-                  <td className="inv-td inv-td-status">
-                    {renderStatusBadge(item.status)}
-                  </td>
-                </tr>
-              ))}
+              {isLoading ? (
+                <tr><td colSpan={4} style={{ textAlign: 'center', padding: '24px', color: '#888' }}>Đang tải...</td></tr>
+              ) : filteredInventory.length > 0 ? (
+                filteredInventory.map((item, idx) => (
+                  <tr key={`${item.id}-${idx}`} className="pos-inventory-row">
+                    <td className="inv-td inv-td-name">{item.name}</td>
+                    <td className="inv-td inv-td-category">{item.category}</td>
+                    <td className="inv-td inv-td-stock">{item.stock}</td>
+                    <td className="inv-td inv-td-status">{renderStatusBadge(item.status)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr><td colSpan={4} style={{ textAlign: 'center', padding: '24px', color: '#888' }}>Không có sản phẩm</td></tr>
+              )}
             </tbody>
           </table>
         </div>

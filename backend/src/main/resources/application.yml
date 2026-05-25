@@ -11,7 +11,7 @@ spring:
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
     properties:
       hibernate:
@@ -23,3 +23,9 @@ jwt:
 
 store:
   code: ${STORE_CODE:HCM01}
+
+# Xóa ảnh minh chứng CK (cột transfer_proof_image_url) sau N ngày từ paid_at
+viepos:
+  transfer-proof:
+    retention-days: 2
+    cleanup-cron: "0 0 3 * * *"

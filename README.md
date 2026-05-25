@@ -88,39 +88,61 @@ cd backend
 
 ## 🌐 Dự án chạy chính thức (Production)
 
-- **Frontend (Firebase Hosting)**: [https://molten-gasket-434712-c8.web.app](https://molten-gasket-434712-c8.web.app)
-- **Backend (Render Web Service)**: `https://viepos-f-b-management-system.onrender.com`
+- **Frontend (Vercel)**: `https://vie-pos-f-b-management-system.vercel.app` (hoặc domain Vercel bạn đã gán)
+- **Frontend cũ (Firebase, tùy chọn)**: [https://molten-gasket-434712-c8.web.app](https://molten-gasket-434712-c8.web.app)
+- **Backend (Render)**: `https://viepos-f-b-management-system.onrender.com`
+
+### Giữ production ổn định (3 việc — không đổi stack)
+
+| Việc | Mục đích | Trạng thái trong repo |
+|------|----------|------------------------|
+| **Fix 1** — `GET /api/ping` mỗi **14 phút** (cron-job.org) | Render free tier không sleep → API không chậm 30–60s | `PingController` + `SecurityConfig` permit `/api/ping` |
+| **Fix 2** — UptimeRobot monitor URL backend | Email/Telegram khi backend down | Cấu hình trên uptimerobot.com (ngoài code) |
+| **Fix 3** — Frontend trên **Vercel** (root = `frontend/`) | Build Vite tự động khi push GitHub | `frontend/vercel.json`, CORS `*.vercel.app` |
+
+**Cron-job.org (Fix 1):** URL = `https://viepos-f-b-management-system.onrender.com/api/ping`, schedule mỗi 14 phút, method GET.
+
+**UptimeRobot (Fix 2):** Monitor `https://viepos-f-b-management-system.onrender.com/api/ping`, keyword `pong` hoặc `ok`.
+
+**Vercel (Fix 3):** Import repo GitHub → Root Directory = `frontend` → Environment `VITE_API_URL` = URL Render backend → Deploy.
 
 ---
 
 ## 🚀 Quy trình cập nhật & Deploy khi thay đổi Code
 
-Khi bạn thực hiện thay đổi mã nguồn trong tương lai, hãy làm theo quy trình dưới đây để cập nhật ứng dụng:
+### 1. Backend (Spring Boot — Render)
+Push lên `main` → Render auto-deploy (Dockerfile).
 
-### 1. Đối với Backend (Spring Boot - Render)
-Render được cấu hình tự động Deploy từ GitHub. Khi sửa xong code Backend:
-1. Gõ lệnh git commit và push code lên GitHub:
-   ```bash
-   git add .
-   git commit -m "mô tả thay đổi của bạn"
-   git push origin main
-   ```
-2. Render sẽ tự động phát hiện commit mới trên nhánh `main`, kéo code về build lại bằng Dockerfile và cập nhật phiên bản mới tự động (Auto-deploy).
+```bash
+git add .
+git commit -m "mô tả thay đổi"
+git push origin main
+```
 
-### 2. Đối với Frontend (React - Firebase Hosting)
-Firebase Hosting cần được Deploy thủ công từ máy tính của bạn:
-1. Mở terminal di chuyển vào thư mục `frontend`:
-   ```bash
-   cd frontend
-   ```
-2. Chạy lệnh build để tạo các file tối ưu cho môi trường sản xuất (đọc cấu hình từ `.env.production` để kết nối tới Render):
-   ```bash
-   pnpm run build
-   ```
-3. Chạy lệnh deploy để tải bản build mới lên Firebase Hosting:
-   ```bash
-   firebase deploy --only hosting
-   ```
+### 2. Frontend (React + Vite — Vercel)
+Push lên `main` → Vercel tự build (thư mục `frontend`).
+
+Đảm bảo trên Vercel có biến:
+
+```bash
+VITE_API_URL=https://viepos-f-b-management-system.onrender.com
+```
+
+Build local (kiểm tra trước khi push):
+
+```bash
+cd frontend
+pnpm install
+pnpm run build
+```
+
+### 3. Firebase (tùy chọn, nếu vẫn dùng song song)
+
+```bash
+cd frontend
+pnpm run build
+firebase deploy --only hosting
+```
 
 ---
 

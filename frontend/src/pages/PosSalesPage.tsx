@@ -6,20 +6,9 @@ import arrowWhite from '../../assets/icon/arrow_white.png';
 import iconPosDarkgreen from '../../assets/icon/pos_darkgreen.png';
 import iconEditGrey from '../../assets/icon/edit_grey.png';
 import './PosSalesPage.css';
+import { mapPosProduct, posUnitPrice, type PosProduct } from '../utils/posProduct';
 
-interface Category {
-  id: number;
-  name: string;
-}
-
-interface Product {
-  id: number;
-  sku: string;
-  name: string;
-  imageUrl: string | null;
-  status: string;
-  category: Category;
-}
+type Product = PosProduct;
 
 export interface CartItem {
   id: string; // unique id for each item in cart
@@ -45,35 +34,25 @@ export interface BackendCard {
   status: string;
 }
 
-const INITIAL_PRODUCTS: Product[] = [
-  { id: 1, sku: 'CF-DEN-01', name: 'Cà phê đen', imageUrl: null, status: 'Đang bán', category: { id: 1, name: 'Cà phê' } },
-  { id: 2, sku: 'CF-SUA-02', name: 'Cà phê sữa', imageUrl: null, status: 'Đang bán', category: { id: 1, name: 'Cà phê' } },
-  { id: 3, sku: 'TS-DAC-01', name: 'Trà sữa đặc sản', imageUrl: null, status: 'Đang bán', category: { id: 2, name: 'Trà sữa' } },
-  { id: 4, sku: 'TS-TRU-02', name: 'Trà sữa truyền thống', imageUrl: null, status: 'Đang bán', category: { id: 2, name: 'Trà sữa' } },
-  { id: 5, sku: 'NE-DEP-01', name: 'Đẹp da', imageUrl: null, status: 'Đang bán', category: { id: 3, name: 'Nước ép' } },
-  { id: 6, sku: 'NE-DAN-02', name: 'Đẹp dáng', imageUrl: null, status: 'Đang bán', category: { id: 3, name: 'Nước ép' } },
-  { id: 7, sku: 'TR-NHT-01', name: 'Trà trái cây nhiệt đới', imageUrl: null, status: 'Đang bán', category: { id: 4, name: 'Trà' } },
-  { id: 8, sku: 'TR-MAN-02', name: 'Trà mãng cầu', imageUrl: null, status: 'Đang bán', category: { id: 4, name: 'Trà' } },
-  { id: 9, sku: 'TR-OIH-03', name: 'Trà ổi hồng', imageUrl: null, status: 'Đang bán', category: { id: 4, name: 'Trà' } },
-  { id: 10, sku: 'TR-HIB-04', name: 'Trà Hibiscus', imageUrl: null, status: 'Đang bán', category: { id: 4, name: 'Trà' } },
-  { id: 11, sku: 'TR-XOA-05', name: 'Trà xoài chanh leo', imageUrl: null, status: 'Đang bán', category: { id: 4, name: 'Trà' } },
-  { id: 12, sku: 'TR-DET-06', name: 'Trà detox nóng', imageUrl: null, status: 'Đang bán', category: { id: 4, name: 'Trà' } },
-  { id: 13, sku: 'AV-MILY-01', name: 'Mì ly', imageUrl: null, status: 'Đang bán', category: { id: 5, name: 'Ăn vặt' } },
-  { id: 14, sku: 'AV-BGAU-02', name: 'Bánh gấu', imageUrl: null, status: 'Đang bán', category: { id: 5, name: 'Ăn vặt' } },
-  { id: 15, sku: 'AV-BQUE-03', name: 'Bánh que', imageUrl: null, status: 'Đang bán', category: { id: 5, name: 'Ăn vặt' } },
-  { id: 16, sku: 'AV-BTM-04', name: 'Bánh tai mèo', imageUrl: null, status: 'Đang bán', category: { id: 5, name: 'Ăn vặt' } },
-  { id: 17, sku: 'AV-BDT-05', name: 'Bánh đồng tiền', imageUrl: null, status: 'Đang bán', category: { id: 5, name: 'Ăn vặt' } },
-];
-
-const INITIAL_CATEGORIES = ['Tất cả', 'Cà phê', 'Trà sữa', 'Nước ép', 'Trà', 'Ăn vặt'];
+function mapCartItemsForApi(items: CartItem[]) {
+  return items.map((item) => ({
+    id: String(item.product.id),
+    productId: String(item.product.id),
+    quantity: item.quantity,
+    price: item.price,
+    note: item.note || '',
+    serveType: item.serveType,
+    duration: item.duration,
+  }));
+}
 
 export default function PosSalesPage() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tất cả');
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
-  const [categories, setCategories] = useState<string[]>(INITIAL_CATEGORIES);
-  const [loading, setLoading] = useState(false);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<string[]>(['Tất cả']);
+  const [loading, setLoading] = useState(true);
 
   // States cho Giỏ hàng (Đơn hàng)
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -94,6 +73,7 @@ export default function PosSalesPage() {
   
   const location = useLocation();
   const lockedCardNumber = location.state?.lockedCardNumber as string | undefined;
+  const isExtend = (location.state?.isExtend as boolean | undefined) ?? (lockedCardNumber ? true : undefined);
   
   const [selectedCardNumber, setSelectedCardNumber] = useState<string | null>(lockedCardNumber || null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -134,19 +114,10 @@ export default function PosSalesPage() {
   const [quantity, setQuantity] = useState(1);
   const [note, setNote] = useState('');
 
-  // Hàm tính giá
+  // Giá POS lấy từ 3 cột giá bảng products (API đã trả giá hiệu lực)
   const calculatePrice = () => {
-    let basePrice = 0;
-    if (serveType === 'takeaway') {
-      basePrice = 25000;
-    } else if (serveType === 'dine_in') {
-      if (duration === '4h') {
-        basePrice = 35000;
-      } else {
-        basePrice = 45000;
-      }
-    }
-    return basePrice;
+    if (!selectedProduct) return 0;
+    return posUnitPrice(selectedProduct, serveType, duration);
   };
 
   // Mở popup
@@ -227,26 +198,19 @@ export default function PosSalesPage() {
     const merged: CartItem[] = [];
     editAllItems.forEach(item => {
       // Find if there's an identical item in the merged array
-      const existing = merged.find(m => 
-        m.product.id === item.product.id && 
-        m.serveType === item.serveType && 
-        m.duration === item.duration && 
+      const existing = merged.find(m =>
+        m.product.id === item.product.id &&
+        m.serveType === item.serveType &&
+        m.duration === item.duration &&
         m.note === item.note
       );
-      
+
+      const getPriceForItem = (p: typeof item) => posUnitPrice(p.product, p.serveType, p.duration);
+
       if (existing) {
         existing.quantity += 1;
-        // Recalculate price
-        let basePrice = 25000;
-        if (existing.serveType === 'dine_in') {
-          basePrice = existing.duration === '4h' ? 35000 : 45000;
-        }
-        existing.price = basePrice;
+        existing.price = getPriceForItem(existing);
       } else {
-        let basePrice = 25000;
-        if (item.serveType === 'dine_in') {
-          basePrice = item.duration === '4h' ? 35000 : 45000;
-        }
         merged.push({
           id: item.id,
           product: item.product,
@@ -254,11 +218,11 @@ export default function PosSalesPage() {
           duration: item.duration,
           quantity: 1,
           note: item.note,
-          price: basePrice
+          price: getPriceForItem(item)
         });
       }
     });
-    
+
     setCartItems(merged);
     setIsEditAllOpen(false);
   };
@@ -290,19 +254,7 @@ export default function PosSalesPage() {
     setCartItems(prev => prev.map(item => {
       if (item.id === id) {
         const newQuantity = Math.max(1, item.quantity + delta);
-        // We calculate new base price because price is price * quantity in the CartItem object currently?
-        // Wait, price in CartItem is basePrice * quantity when added.
-        // It's better to recalculate based on serveType and duration.
-        let basePrice = 0;
-        if (item.serveType === 'takeaway') {
-          basePrice = 25000;
-        } else if (item.serveType === 'dine_in') {
-          if (item.duration === '4h') {
-            basePrice = 35000;
-          } else {
-            basePrice = 45000;
-          }
-        }
+        const basePrice = posUnitPrice(item.product, item.serveType, item.duration);
         return { ...item, quantity: newQuantity, price: basePrice };
       }
       return item;
@@ -326,28 +278,23 @@ export default function PosSalesPage() {
 
   // Hoàn tất thanh toán -> Mở màn hình chọn thẻ
   const handleCompletePayment = async () => {
-    try {
-      const res = await cardAPI.getFreeCards();
-      const sortedCards = [...res.data].sort((a, b) => parseInt(a.cardNumber) - parseInt(b.cardNumber));
-      setFreeCards(sortedCards);
-    } catch (err) {
-      console.error("Không thể tải danh sách thẻ trống:", err);
-      // Fallback data
-      const mockCards = [
-        { id: 1, cardNumber: "06", status: "trống" },
-        { id: 2, cardNumber: "09", status: "trống" },
-        { id: 3, cardNumber: "10", status: "trống" },
-        { id: 4, cardNumber: "11", status: "trống" },
-        { id: 5, cardNumber: "14", status: "trống" },
-        { id: 6, cardNumber: "15", status: "trống" },
-        { id: 7, cardNumber: "17", status: "trống" },
-        { id: 8, cardNumber: "20", status: "trống" },
-        { id: 9, cardNumber: "21", status: "trống" },
-        { id: 10, cardNumber: "23", status: "trống" },
-      ];
-      setFreeCards(mockCards.sort((a, b) => parseInt(a.cardNumber) - parseInt(b.cardNumber)));
+    if (!lockedCardNumber) {
+      // Only fetch free cards when no card is pre-locked
+      try {
+        const res = await cardAPI.getFreeCards();
+        const mappedCards = res.data.map((c: any) => ({
+          id: c.id,
+          cardNumber: c.cardCode,
+          status: c.status
+        }));
+        const sortedCards = mappedCards.sort((a: any, b: any) => parseInt(a.cardNumber) - parseInt(b.cardNumber));
+        setFreeCards(sortedCards);
+      } catch (err) {
+        console.error("Không thể tải danh sách thẻ trống:", err);
+        setFreeCards([]);
+      }
     }
-    setSelectedCardNumber(null);
+    setSelectedCardNumber(lockedCardNumber || null);
     setIsCardSelectionOpen(true);
     setIsCheckoutOpen(false);
   };
@@ -382,7 +329,11 @@ export default function PosSalesPage() {
       await cardAPI.startSession({
         cardNumber: selectedCardNumber,
         orderId: orderId,
-        duration: duration
+        duration: duration,
+        paymentMethod: paymentMethod === 'cash' ? 'cash' : 'transfer',
+        paymentAmount: finalTotal,
+        paymentImage: paymentMethod === 'transfer' ? paymentImage : null,
+        items: mapCartItemsForApi(cartItems),
       });
       // Save metadata to LocalStorage for fallback
       const savedMetadata = localStorage.getItem('pos_orders_metadata');
@@ -434,6 +385,9 @@ export default function PosSalesPage() {
     setCartItems([]);
     setIsCardSelectionOpen(false);
     setIsCartOpen(false);
+    if (lockedCardNumber) {
+      navigate('/pos/tables', { state: { openCardNumber: lockedCardNumber } });
+    }
   };
 
   // Bỏ qua chọn thẻ và kết thúc
@@ -441,14 +395,19 @@ export default function PosSalesPage() {
     if (lockedCardNumber) {
       setIsSubmitting(true);
       try {
-        // Find active session for this card
+        // Find active session for this card - raw API uses card.cardCode and status as enum string
         const sessionsRes = await cardAPI.getSessions();
-        const activeSession = sessionsRes.data.find((s: any) => s.card.cardNumber === lockedCardNumber && !s.actualEndTime && s.status !== 'Hoàn thành');
+        const activeSession = sessionsRes.data.find((s: any) =>
+          (s.card?.cardCode === lockedCardNumber || s.card?.cardNumber === lockedCardNumber) &&
+          !s.actualEndAt &&
+          s.status === 'ACTIVE'
+        );
         
         if (activeSession) {
           const savedMetadata = localStorage.getItem('pos_orders_metadata');
           const metadata = savedMetadata ? JSON.parse(savedMetadata) : {};
-          const orderId = activeSession.orderId;
+          // Raw API: field is order.orderCode, not orderId
+          const orderId = activeSession.order?.orderCode ?? activeSession.orderId ?? '';
           const orderMetadata = metadata[orderId] || {};
           const originalItems = orderMetadata.items || [];
           
@@ -459,21 +418,22 @@ export default function PosSalesPage() {
                 .reduce((sum: number, i: any) => sum + (i.quantity || 1), 0);
           }
 
-          const originalAllDayCount = originalItems
-            .filter((i: any) => i.duration === 'all_day' && i.serveType === 'dine_in')
-            .reduce((sum: number, i: any) => sum + (i.quantity || 1), 0);
-          
-          let currentEndTime = new Date(activeSession.endTime);
-          const match = activeSession.endTime.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
-          if (match && !activeSession.endTime.endsWith('Z') && !/([+-]\d{2}:\d{2})$/.test(activeSession.endTime)) {
-            currentEndTime = new Date(
-              parseInt(match[1]),
-              parseInt(match[2]) - 1,
-              parseInt(match[3]),
-              parseInt(match[4]),
-              parseInt(match[5]),
-              parseInt(match[6])
-            );
+          // Raw API: field is expectedEndAt, not endTime
+          const rawEndTime = activeSession.expectedEndAt ?? activeSession.endTime ?? '';
+          let currentEndTime = new Date(rawEndTime);
+          // If no timezone suffix, treat as local time
+          if (rawEndTime && !rawEndTime.endsWith('Z') && !/([+-]\d{2}:\d{2})$/.test(rawEndTime)) {
+            const m = rawEndTime.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+            if (m) {
+              currentEndTime = new Date(
+                parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]),
+                parseInt(m[4]), parseInt(m[5]), parseInt(m[6])
+              );
+            }
+          }
+          // Fallback: if currentEndTime is invalid or in the past, use now
+          if (isNaN(currentEndTime.getTime()) || currentEndTime.getTime() < Date.now()) {
+            currentEndTime = new Date();
           }
           
           const new4hCount = cartItems
@@ -484,26 +444,36 @@ export default function PosSalesPage() {
             .filter(i => i.duration === 'all_day' && i.serveType === 'dine_in')
             .reduce((sum, i) => sum + i.quantity, 0);
             
-          const totalAllDayCount = originalAllDayCount + newAllDayCount;
-          
           let extendTime = false;
           let newEndTime = currentEndTime;
+          let upgradeToAllDay = false;
 
-          if (new4hCount > 0) {
-            newEndTime = new Date(newEndTime.getTime() + 4 * 60 * 60 * 1000);
-            extendTime = true;
-          }
-
-          if (totalAllDayCount >= initial4hCount && initial4hCount > 0) {
+          if (newAllDayCount > 0) {
+            // Upgrade to all_day: set end time to 22:00 today
             newEndTime = new Date();
             newEndTime.setHours(22, 0, 0, 0);
+            extendTime = true;
+            upgradeToAllDay = true;
+          } else if (new4hCount > 0) {
+            // Add 4 hours to the REMAINING time (not from now)
+            newEndTime = new Date(newEndTime.getTime() + 4 * 60 * 60 * 1000);
             extendTime = true;
           }
 
           if (extendTime) {
             const pad = (n: number) => n.toString().padStart(2, '0');
             const formattedDate = `${newEndTime.getFullYear()}-${pad(newEndTime.getMonth() + 1)}-${pad(newEndTime.getDate())}T${pad(newEndTime.getHours())}:${pad(newEndTime.getMinutes())}:${pad(newEndTime.getSeconds())}`;
-            await cardAPI.extendSession(lockedCardNumber, formattedDate);
+            await cardAPI.extendSession(lockedCardNumber, formattedDate, upgradeToAllDay ? 'all_day' : undefined);
+          }
+
+          if (cartItems.length > 0 && orderId) {
+            await orderAPI.appendItems({
+              orderCode: orderId,
+              paymentMethod: paymentMethod === 'cash' ? 'cash' : 'transfer',
+              paymentAmount: finalTotal,
+              paymentImage: paymentMethod === 'transfer' ? paymentImage : null,
+              items: mapCartItemsForApi(cartItems),
+            });
           }
 
           // Append items to metadata
@@ -577,6 +547,18 @@ export default function PosSalesPage() {
         displayTaId = taOrderRes.data.displayId;
       } catch (err) {
         console.error('Không thể lấy mã đơn mang đi từ backend, dùng fallback:', err);
+      }
+      
+      try {
+        await orderAPI.createTakeaway({
+          orderId: taOrderId,
+          paymentMethod: paymentMethod === 'cash' ? 'cash' : 'transfer',
+          paymentAmount: finalTotal,
+          paymentImage: paymentMethod === 'transfer' ? paymentImage : null,
+          items: mapCartItemsForApi(cartItems),
+        });
+      } catch (err) {
+        console.error('Lỗi khi tạo đơn mang đi trên backend:', err);
       }
       
       orderHistory.push({
@@ -653,10 +635,9 @@ export default function PosSalesPage() {
     const fetchData = async () => {
       try {
         const res = await productAPI.getProducts();
-        const data: Product[] = res.data;
+        const data: Product[] = res.data.map((p: Record<string, unknown>) => mapPosProduct(p));
         setProducts(data);
-        // Extract unique category names from products
-        const cats = ['Tất cả', ...Array.from(new Set(data.map(p => p.category.name)))];
+        const cats = ['Tất cả', ...Array.from(new Set(data.map(p => p.categoryName)))];
         setCategories(cats);
       } catch (err) {
         console.error('Không thể tải danh sách sản phẩm:', err);
@@ -668,10 +649,10 @@ export default function PosSalesPage() {
   }, []);
 
   const filteredProducts = products.filter(p => {
-    const matchCategory = selectedCategory === 'Tất cả' || p.category.name === selectedCategory;
-    const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.sku.toLowerCase().includes(searchQuery.toLowerCase());
-    const isActive = p.status === 'Đang bán';
-    return matchCategory && matchSearch && isActive;
+    const matchCategory = selectedCategory === 'Tất cả' || p.categoryName === selectedCategory;
+    const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        (p.sku || '').toLowerCase().includes(searchQuery.toLowerCase());
+    return matchCategory && matchSearch && p.isActive !== false;
   });
 
   // Tạo chữ viết tắt từ tên sản phẩm (tối đa 2 chữ cái đầu của từ)
@@ -1093,11 +1074,7 @@ export default function PosSalesPage() {
             {/* Body */}
             <div className="pos-edit-all-body">
               {editAllItems.map((item, index) => {
-                // Calculate individual price for display
-                let price = 25000;
-                if (item.serveType === 'dine_in') {
-                  price = item.duration === '4h' ? 35000 : 45000;
-                }
+                const price = posUnitPrice(item.product, item.serveType, item.duration);
 
                 return (
                   <div key={item.id} className="pos-edit-all-item">
@@ -1313,9 +1290,23 @@ export default function PosSalesPage() {
             </div>
 
             {lockedCardNumber ? (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', fontSize: '20px', color: '#333', fontWeight: 600 }}>
-                Đã gán vào thẻ <strong style={{ color: '#349409', fontSize: '28px', marginLeft: '8px' }}>#{lockedCardNumber}</strong>
-              </div>
+              <>
+                {/* Locked card - pre-selected, cannot change */}
+                <div className="pos-card-selection-subheader">
+                  <span className="pos-card-selection-title">
+                    {isExtend ? 'Thêm món vào thẻ' : 'Gán vào thẻ'}
+                  </span>
+                </div>
+                <div className="pos-card-selection-grid" style={{ justifyContent: 'center' }}>
+                  <button
+                    className="pos-card-selection-btn active"
+                    style={{ cursor: 'default' }}
+                    disabled
+                  >
+                    {lockedCardNumber}
+                  </button>
+                </div>
+              </>
             ) : (
               <>
                 {/* Title Section */}
@@ -1346,12 +1337,13 @@ export default function PosSalesPage() {
             {/* Action Buttons */}
             <div className="pos-card-selection-footer">
               {lockedCardNumber ? (
+                // Locked card mode: single CHỌN button
                 <button 
-                  className="pos-card-btn-skip"
-                  onClick={handleSkipCardSelection}
+                  className="pos-card-btn-select"
                   disabled={isSubmitting}
+                  onClick={isExtend ? handleSkipCardSelection : handleSelectCardSelection}
                 >
-                  {isSubmitting ? 'ĐANG XỬ LÝ...' : 'BỎ QUA'}
+                  {isSubmitting ? 'ĐANG XỬ LÝ...' : 'CHỌN'}
                 </button>
               ) : (
                 <>

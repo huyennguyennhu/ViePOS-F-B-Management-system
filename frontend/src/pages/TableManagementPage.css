@@ -508,7 +508,15 @@
   padding: 10px 8px;
   color: #111;
   vertical-align: middle;
+  background-color: #ffffff;
+}
+
+.tables-products-table tr.row-package-4h td {
   background-color: #F0F8EC;
+}
+
+.tables-products-table tr:not(.row-package-4h) td {
+  background-color: #ffffff;
 }
 
 .tables-products-table td:first-child {

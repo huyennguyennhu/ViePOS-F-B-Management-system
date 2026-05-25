@@ -1,15 +1,14 @@
 package com.viepos.backend;
 
-import com.viepos.backend.models.Category;
-import com.viepos.backend.models.Product;
-import com.viepos.backend.models.Card;
-import com.viepos.backend.repositories.CategoryRepository;
-import com.viepos.backend.repositories.ProductRepository;
-import com.viepos.backend.repositories.CardRepository;
-import com.viepos.backend.repositories.CardSessionRepository;
+import com.viepos.backend.models.*;
+import com.viepos.backend.models.enums.*;
+import com.viepos.backend.repositories.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+
+import java.math.BigDecimal;
 
 @Component
 public class DataSeeder implements CommandLineRunner {
@@ -21,52 +20,100 @@ public class DataSeeder implements CommandLineRunner {
     private ProductRepository productRepository;
 
     @Autowired
-    private CardRepository cardRepository;
+    private ServiceCardRepository cardRepository;
 
     @Autowired
-    private CardSessionRepository cardSessionRepository;
+    private EmployeeRepository employeeRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @Override
     public void run(String... args) throws Exception {
+        // Seed Employees & Users
+        if (!employeeRepository.existsByEmployeeId("EMP0001")) {
+            Employee rootAdmin = new Employee();
+            rootAdmin.setEmployeeId("EMP0001");
+            rootAdmin.setFullName("Nguyễn Thị L");
+            rootAdmin.setPersonalEmail("nguyennlt.ncc@gmail.com");
+            rootAdmin.setPhone("0901234567");
+            rootAdmin.setRole(EmployeeRole.ROOT_ADMIN);
+            rootAdmin.setStatus(EmployeeStatus.ACTIVE);
+            employeeRepository.save(rootAdmin);
+
+            User rootUser = new User();
+            rootUser.setEmployee(rootAdmin);
+            rootUser.setEmail("nguyennlt.ncc@gmail.com");
+            rootUser.setPassword(passwordEncoder.encode("Admin123!@#"));
+            userRepository.save(rootUser);
+        }
+
+        // Seed Categories
         if (categoryRepository.count() == 0) {
-            Category c1 = categoryRepository.save(new Category(null, "Cà phê"));
-            Category c2 = categoryRepository.save(new Category(null, "Trà sữa"));
-            Category c3 = categoryRepository.save(new Category(null, "Nước ép"));
-            Category c4 = categoryRepository.save(new Category(null, "Trà"));
-            Category c5 = categoryRepository.save(new Category(null, "Ăn vặt"));
+            Category c1 = categoryRepository.save(new Category(null, "CAT001", "Cà phê", null, null, new BigDecimal("25000"), new BigDecimal("35000"), new BigDecimal("45000"), 1, true, null, null));
+            Category c2 = categoryRepository.save(new Category(null, "CAT002", "Trà sữa", null, null, new BigDecimal("25000"), new BigDecimal("35000"), new BigDecimal("45000"), 2, true, null, null));
+            Category c3 = categoryRepository.save(new Category(null, "CAT003", "Nước ép", null, null, new BigDecimal("35000"), new BigDecimal("45000"), new BigDecimal("55000"), 3, true, null, null));
+            Category c4 = categoryRepository.save(new Category(null, "CAT004", "Trà", null, null, new BigDecimal("30000"), new BigDecimal("40000"), new BigDecimal("50000"), 4, true, null, null));
+            Category c5 = categoryRepository.save(new Category(null, "CAT005", "Ăn vặt", null, null, new BigDecimal("15000"), new BigDecimal("15000"), new BigDecimal("15000"), 5, true, null, null));
+            Category c6 = categoryRepository.save(new Category(null, "CAT006", "Khác", null, null, new BigDecimal("0"), new BigDecimal("0"), new BigDecimal("0"), 99, true, null, null));
 
+            // Seed Products
             if (productRepository.count() == 0) {
-                productRepository.save(new Product(null, "CF-DEN-01", "Cà phê đen", null, "Đang bán", c1));
-                productRepository.save(new Product(null, "CF-SUA-02", "Cà phê sữa", null, "Đang bán", c1));
-                
-                productRepository.save(new Product(null, "TS-DAC-01", "Trà sữa đặc sản", null, "Đang bán", c2));
-                productRepository.save(new Product(null, "TS-TRU-02", "Trà sữa truyền thống", null, "Đang bán", c2));
-                
-                productRepository.save(new Product(null, "NE-DEP-01", "Đẹp da", null, "Đang bán", c3));
-                productRepository.save(new Product(null, "NE-DAN-02", "Đẹp dáng", null, "Đang bán", c3));
-                
-                productRepository.save(new Product(null, "TR-NHT-01", "Trà trái cây nhiệt đới", null, "Đang bán", c4));
-                productRepository.save(new Product(null, "TR-MAN-02", "Trà mãng cầu", null, "Đang bán", c4));
-                productRepository.save(new Product(null, "TR-OIH-03", "Trà ổi hồng", null, "Đang bán", c4));
-                productRepository.save(new Product(null, "TR-HIB-04", "Trà Hibiscus", null, "Đang bán", c4));
-                productRepository.save(new Product(null, "TR-XOA-05", "Trà xoài chanh leo", null, "Đang bán", c4));
-                productRepository.save(new Product(null, "TR-DET-06", "Trà detox nóng", null, "Đang bán", c4));
-                
-                productRepository.save(new Product(null, "AV-MILY-01", "Mì ly", null, "Đang bán", c5));
-                productRepository.save(new Product(null, "AV-BGAU-02", "Bánh gấu", null, "Đang bán", c5));
-                productRepository.save(new Product(null, "AV-BQUE-03", "Bánh que", null, "Đang bán", c5));
-                productRepository.save(new Product(null, "AV-BTM-04", "Bánh tai mèo", null, "Đang bán", c5));
-                productRepository.save(new Product(null, "AV-BDT-05", "Bánh đồng tiền", null, "Đang bán", c5));
+                // Cà phê
+                productRepository.save(createProduct("PRD001", "CF-DEN-01", c1, "Cà phê đen", new BigDecimal("25000"), new BigDecimal("35000"), new BigDecimal("45000")));
+                productRepository.save(createProduct("PRD002", "CF-SUA-02", c1, "Cà phê sữa", new BigDecimal("25000"), new BigDecimal("35000"), new BigDecimal("45000")));
+
+                // Trà sữa
+                productRepository.save(createProduct("PRD003", "TS-DAC-01", c2, "Trà sữa đặc sản", new BigDecimal("25000"), new BigDecimal("35000"), new BigDecimal("45000")));
+                productRepository.save(createProduct("PRD004", "TS-TRU-02", c2, "Trà sữa truyền thống", new BigDecimal("25000"), new BigDecimal("35000"), new BigDecimal("45000")));
+
+                // Nước ép
+                productRepository.save(createProduct("PRD005", "NE-DEP-01", c3, "Nước ép cam", new BigDecimal("35000"), new BigDecimal("45000"), new BigDecimal("55000")));
+                productRepository.save(createProduct("PRD006", "NE-DAN-02", c3, "Nước ép táo", new BigDecimal("35000"), new BigDecimal("45000"), new BigDecimal("55000")));
+
+                // Trà
+                productRepository.save(createProduct("PRD007", "TR-NHT-01", c4, "Trà nhiệt đới", new BigDecimal("30000"), new BigDecimal("40000"), new BigDecimal("50000")));
+                productRepository.save(createProduct("PRD008", "TR-MAN-02", c4, "Trà mãng cầu", new BigDecimal("30000"), new BigDecimal("40000"), new BigDecimal("50000")));
+                productRepository.save(createProduct("PRD009", "TR-OIH-03", c4, "Trà ổi hồng", new BigDecimal("30000"), new BigDecimal("40000"), new BigDecimal("50000")));
+
+                // Ăn vặt
+                productRepository.save(createProduct("PRD010", "AV-HD-01", c5, "Hạt hướng dương", new BigDecimal("15000"), new BigDecimal("15000"), new BigDecimal("15000")));
+                productRepository.save(createProduct("PRD011", "AV-KG-02", c5, "Khô gà", new BigDecimal("15000"), new BigDecimal("15000"), new BigDecimal("15000")));
             }
         }
 
-        if (cardRepository.count() != 12) {
-            cardSessionRepository.deleteAll();
-            cardRepository.deleteAll();
-            String[] cardNumbers = {"01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"};
-            for (String cardNumber : cardNumbers) {
-                cardRepository.save(new Card(null, cardNumber, "trống"));
+        // Seed Cards
+        if (cardRepository.count() == 0) {
+            for (int i = 1; i <= 12; i++) {
+                String code = String.format("CARD%03d", i);
+                ServiceCard card = new ServiceCard();
+                card.setCardCode(code);
+                card.setCardType(CardType.PHYSICAL);
+                card.setStatus(CardStatus.AVAILABLE);
+                cardRepository.save(card);
             }
         }
+
+    }
+
+    private Product createProduct(String pCode, String sku, Category cat, String name, BigDecimal pt, BigDecimal p4, BigDecimal pf) {
+        Product p = new Product();
+        p.setProductCode(pCode);
+        p.setSku(sku);
+        p.setCategory(cat);
+        p.setName(name);
+        p.setPriceTakeaway(pt);
+        p.setPricePackage4h(p4);
+        p.setPricePackageFullday(pf);
+        p.setUnit("ly");
+        p.setCurrentStock(new BigDecimal("100"));
+        p.setMinimumStock(new BigDecimal("10"));
+        p.setIsActive(true);
+        p.setIsOutOfStock(false);
+        p.setCostPrice(BigDecimal.ZERO);
+        return p;
     }
 }

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, X, Eye, EyeOff } from 'lucide-react';
 import { authAPI } from '../services/api';
+import { canAccessManagement, canAccessPos, isStaffRole, getAuthRole } from '../utils/auth';
 import './StaffLoginPage.css';
 
 export default function StaffLoginPage() {
@@ -35,6 +36,16 @@ export default function StaffLoginPage() {
       setEmailError('Email không hợp lệ (VD: abc@gmail.com)');
     }
   };
+
+  useEffect(() => {
+    if (canAccessManagement()) {
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+    if (canAccessPos() && isStaffRole(getAuthRole())) {
+      navigate('/pos/sales', { replace: true });
+    }
+  }, [navigate]);
 
   useEffect(() => {
     if (error) {
@@ -110,7 +121,7 @@ export default function StaffLoginPage() {
           navigate('/pos/sales');
         }
       } catch (err: any) {
-        setError(err.response?.data?.message || 'Có lỗi xảy ra khi đăng nhập. Vui lòng thử lại.');
+        setError('Email hoặc mã PIN không chính xác.');
       } finally {
         setIsSubmitting(false);
       }

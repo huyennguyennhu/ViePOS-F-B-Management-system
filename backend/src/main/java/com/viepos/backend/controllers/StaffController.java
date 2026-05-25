@@ -1,40 +1,46 @@
 package com.viepos.backend.controllers;
 
-import com.viepos.backend.models.Role;
+import com.viepos.backend.models.AccountRequest;
+import com.viepos.backend.models.Employee;
 import com.viepos.backend.models.User;
-import com.viepos.backend.models.UserStatus;
+import com.viepos.backend.models.enums.AuditAction;
+import com.viepos.backend.models.enums.EmployeeRole;
+import com.viepos.backend.models.enums.EmployeeStatus;
+import com.viepos.backend.models.enums.RequestStatus;
+import com.viepos.backend.models.enums.RequestType;
+import com.viepos.backend.repositories.AccountRequestRepository;
+import com.viepos.backend.repositories.EmployeeRepository;
 import com.viepos.backend.repositories.UserRepository;
-import com.viepos.backend.repositories.PinChangeRequestRepository;
-import com.viepos.backend.repositories.PinResetRequestRepository;
-import com.viepos.backend.models.PinChangeRequest;
-import com.viepos.backend.models.PinResetRequest;
 import com.viepos.backend.security.JwtUtil;
+import com.viepos.backend.services.AuditLogService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/staff")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
 public class StaffController {
 
     @Autowired
     private UserRepository userRepository;
 
     @Autowired
-    private PinChangeRequestRepository pinChangeRequestRepository;
+    private EmployeeRepository employeeRepository;
 
     @Autowired
-    private PinResetRequestRepository pinResetRequestRepository;
+    private AccountRequestRepository requestRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -48,7 +54,91 @@ public class StaffController {
     @Autowired
     private JwtUtil jwtUtil;
 
-    // Staff Register
+    @Autowired
+    private AuditLogService auditLogService;
+
+    /** DB: ACTIVE/RESIGNED → UI: APPROVED/REJECTED */
+    private static String statusToUi(EmployeeStatus status) {
+        if (status == null || status == EmployeeStatus.ACTIVE) {
+            return "APPROVED";
+        }
+        return "REJECTED";
+    }
+
+    private static EmployeeStatus statusFromUi(String uiStatus) {
+        if (uiStatus == null || uiStatus.isBlank()) {
+            return EmployeeStatus.ACTIVE;
+        }
+        String s = uiStatus.trim().toUpperCase();
+        if ("APPROVED".equals(s) || "ACTIVE".equals(s)) {
+            return EmployeeStatus.ACTIVE;
+        }
+        if ("REJECTED".equals(s) || "RESIGNED".equals(s)) {
+            return EmployeeStatus.RESIGNED;
+        }
+        return EmployeeStatus.valueOf(s);
+    }
+
+    private static String roleToUi(EmployeeRole role) {
+        if (role == null || role == EmployeeRole.STAFF) {
+            return "Nhân viên";
+        }
+        if (role == EmployeeRole.ADMIN || role == EmployeeRole.ROOT_ADMIN) {
+            return "Quản lý";
+        }
+        return role.name();
+    }
+
+    // Helper to format User to old UI struct
+    private Map<String, Object> mapUserToOldStruct(User user, String statusOverride) {
+        Map<String, Object> map = new HashMap<>();
+        Employee emp = user.getEmployee();
+        map.put("id", user.getId().toString());
+        map.put("employeeId", emp != null ? emp.getEmployeeId() : null);
+        map.put("name", emp != null ? emp.getFullName() : "");
+        map.put("email", user.getEmail());
+        map.put("phone", emp != null ? emp.getPhone() : "");
+        map.put("role", emp != null ? roleToUi(emp.getRole()) : "Nhân viên");
+        map.put("status", statusOverride != null ? statusOverride : statusToUi(emp != null ? emp.getStatus() : null));
+        map.put("createdAt", user.getCreatedAt() != null ? user.getCreatedAt().toString() : "");
+        return map;
+    }
+
+    private Map<String, Object> mapRequestToOldStruct(AccountRequest req, String status) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", req.getId().toString());
+        map.put("name", req.getRequestFullName() != null ? req.getRequestFullName() : (req.getEmployee() != null ? req.getEmployee().getFullName() : ""));
+        map.put("email", req.getRequestEmail() != null ? req.getRequestEmail() : "");
+        map.put("phone", req.getRequestPhone() != null ? req.getRequestPhone() : "");
+        map.put("role", "STAFF");
+        map.put("status", status);
+        map.put("createdAt", req.getCreatedAt().toString());
+        
+        // Wrap for pin requests where frontend expects req.user.name
+        Map<String, Object> userMap = new HashMap<>();
+        userMap.put("name", req.getEmployee() != null ? req.getEmployee().getFullName() : "");
+        userMap.put("email", req.getEmployee() != null ? req.getEmployee().getPersonalEmail() : "");
+        map.put("user", userMap);
+        
+        return map;
+    }
+
+    private User getCurrentUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getPrincipal() == null) {
+            return null;
+        }
+        String username;
+        if (auth.getPrincipal() instanceof UserDetails details) {
+            username = details.getUsername();
+        } else if (auth.getPrincipal() instanceof String principalString) {
+            username = principalString;
+        } else {
+            return null;
+        }
+        return userRepository.findByEmail(username).orElse(null);
+    }
+
     @PostMapping("/register")
     public ResponseEntity<?> registerStaff(@RequestBody Map<String, String> request) {
         String name = request.get("name");
@@ -56,107 +146,109 @@ public class StaffController {
         String phone = request.get("phone");
         String pin = request.get("pin");
 
-        Optional<User> existingUserOpt = userRepository.findByEmail(email);
-        if (existingUserOpt.isPresent()) {
-            User existingUser = existingUserOpt.get();
-            if (existingUser.getStatus() == UserStatus.PENDING) {
-                return ResponseEntity.badRequest().body(Map.of("message", "Email này đã được đăng ký và đang chờ duyệt!"));
-            } else if (existingUser.getStatus() == UserStatus.APPROVED) {
-                return ResponseEntity.badRequest().body(Map.of("message", "Email này đã có tài khoản hoạt động. Vui lòng đăng nhập!"));
-            } else {
-                return ResponseEntity.badRequest().body(Map.of("message", "Email này đã được sử dụng."));
-            }
+        if (userRepository.existsByEmail(email)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Email này đã được đăng ký!"));
         }
 
-        User staff = new User();
-        staff.setName(name);
-        staff.setEmail(email);
-        staff.setPhone(phone);
-        // Save the PIN as the hashed password
-        staff.setPassword(passwordEncoder.encode(pin));
-        staff.setRole(Role.STAFF);
-        staff.setStatus(UserStatus.PENDING); // Wait for Manager approval
-
-        userRepository.save(staff);
+        AccountRequest req = new AccountRequest();
+        req.setRequestCode("REQ" + System.currentTimeMillis());
+        req.setRequestType(RequestType.REGISTER);
+        req.setRequestFullName(name);
+        req.setRequestEmail(email);
+        req.setRequestPhone(phone);
+        req.setRequestPinHash(passwordEncoder.encode(pin));
+        req.setStatus(RequestStatus.PENDING);
+        requestRepository.save(req);
 
         return ResponseEntity.ok(Map.of("message", "Registration successful. Please wait for manager approval."));
     }
 
-    // Get Pending Staff (For Manager)
     @GetMapping("/pending")
-    public ResponseEntity<List<User>> getPendingStaff() {
-        // Retrieve all staff with PENDING status
-        List<User> pendingStaff = userRepository.findByRoleAndStatus(Role.STAFF, UserStatus.PENDING);
-        // Usually we shouldn't send passwords, but let's assume they are hashed and safe for a demo.
-        // It's better to clean up passwords in DTOs, but returning User works for quick demo.
-        for(User u : pendingStaff) {
-            u.setPassword(null); // hide password hash
-        }
-        return ResponseEntity.ok(pendingStaff);
+    public ResponseEntity<List<Map<String, Object>>> getPendingStaff() {
+        List<AccountRequest> pending = requestRepository.findByRequestTypeAndStatusOrderByCreatedAtDesc(RequestType.REGISTER, RequestStatus.PENDING);
+        return ResponseEntity.ok(pending.stream().map(r -> mapRequestToOldStruct(r, "PENDING")).collect(Collectors.toList()));
     }
 
-    // Approve Staff (For Manager)
     @PutMapping("/{id}/approve")
     public ResponseEntity<?> approveStaff(@PathVariable String id) {
-        Optional<User> userOpt = userRepository.findById(id);
-        if (userOpt.isPresent()) {
-            User user = userOpt.get();
-            user.setStatus(UserStatus.APPROVED);
+        Optional<AccountRequest> reqOpt = requestRepository.findById(UUID.fromString(id));
+        if (reqOpt.isPresent() && reqOpt.get().getRequestType() == RequestType.REGISTER) {
+            AccountRequest req = reqOpt.get();
+            User currentUser = getCurrentUser();
+            if (currentUser != null && currentUser.getEmployee() != null) {
+                req.setApprovedBy(currentUser.getEmployee());
+            }
+            req.setStatus(RequestStatus.APPROVED);
+            req.setApprovedAt(LocalDateTime.now());
+            requestRepository.save(req);
+
+            Employee emp = new Employee();
+            emp.setEmployeeId("EMP" + System.currentTimeMillis());
+            emp.setFullName(req.getRequestFullName());
+            emp.setPersonalEmail(req.getRequestEmail());
+            emp.setPhone(req.getRequestPhone());
+            emp.setRole(EmployeeRole.STAFF);
+            emp.setStatus(EmployeeStatus.ACTIVE);
+            employeeRepository.save(emp);
+
+            User user = new User();
+            user.setEmployee(emp);
+            user.setEmail(req.getRequestEmail());
+            user.setPassword(req.getRequestPinHash());
             userRepository.save(user);
 
-            // Mock sending email
-            System.out.println("=========================================================");
-            System.out.println("MOCK EMAIL SENT TO: " + user.getEmail());
-            System.out.println("SUBJECT: Your ViePOS account has been approved");
-            System.out.println("BODY: You can now login with your email and PIN.");
-            System.out.println("=========================================================");
+            if (currentUser != null) {
+                auditLogService.log(currentUser, AuditAction.APPROVE, "account_requests", req.getId(), null, Map.of("requestCode", req.getRequestCode()));
+            }
 
             return ResponseEntity.ok(Map.of("message", "Staff account approved. Email sent."));
         }
         return ResponseEntity.notFound().build();
     }
     
-    // Reject Staff (For Manager)
     @PutMapping("/{id}/reject")
     public ResponseEntity<?> rejectStaff(@PathVariable String id) {
-        Optional<User> userOpt = userRepository.findById(id);
-        if (userOpt.isPresent()) {
-            User user = userOpt.get();
-            user.setStatus(UserStatus.REJECTED);
-            userRepository.save(user);
+        Optional<AccountRequest> reqOpt = requestRepository.findById(UUID.fromString(id));
+        if (reqOpt.isPresent() && reqOpt.get().getRequestType() == RequestType.REGISTER) {
+            AccountRequest req = reqOpt.get();
+            User currentUser = getCurrentUser();
+            if (currentUser != null && currentUser.getEmployee() != null) {
+                req.setApprovedBy(currentUser.getEmployee());
+            }
+            req.setStatus(RequestStatus.REJECTED);
+            req.setApprovedAt(LocalDateTime.now());
+            requestRepository.save(req);
+            if (currentUser != null) {
+                auditLogService.log(currentUser, AuditAction.REJECT, "account_requests", req.getId(), null, Map.of("requestCode", req.getRequestCode()));
+            }
             return ResponseEntity.ok(Map.of("message", "Staff account rejected."));
         }
         return ResponseEntity.notFound().build();
     }
 
-    // Staff Login
     @PostMapping("/login")
     public ResponseEntity<?> loginStaff(@RequestBody Map<String, String> request) {
         String email = request.get("email");
         String pin = request.get("pin");
 
-        // Verify if account is approved before generating token
         Optional<User> userOpt = userRepository.findByEmail(email);
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Tài khoản không tồn tại."));
         }
 
         User user = userOpt.get();
-        if (user.getRole() != Role.STAFF) {
-            return ResponseEntity.status(403).body(Map.of("ok", false, "message", "Bạn không có quyền truy cập ứng dụng nhân viên."));
+        
+        if (user.getEmployee() == null) {
+            return ResponseEntity.status(500).body(Map.of("ok", false, "message", "User employee record not found"));
         }
-        if (user.getStatus() == UserStatus.PENDING) {
-            return ResponseEntity.status(403).body(Map.of("ok", false, "message", "Tài khoản đang chờ duyệt. Vui lòng thử lại sau!"));
-        }
-        if (user.getStatus() == UserStatus.REJECTED) {
-            return ResponseEntity.status(403).body(Map.of("ok", false, "message", "Tài khoản đã bị từ chối."));
+        
+        // Luồng POS: chỉ nhân viên (STAFF) đăng nhập bằng PIN
+        if (user.getEmployee().getRole() != EmployeeRole.STAFF) {
+            return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Email hoặc mã PIN không chính xác."));
         }
 
         try {
-            // Check credentials using AuthenticationManager (compares raw pin with hashed password)
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(email, pin)
-            );
+            authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(email, pin));
         } catch (Exception e) {
             return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Email hoặc mã PIN không chính xác."));
         }
@@ -167,10 +259,10 @@ public class StaffController {
         Map<String, Object> response = new HashMap<>();
         response.put("ok", true);
         response.put("token", jwt);
-        response.put("role", user.getRole().name());
-        response.put("name", user.getName());
+        response.put("role", user.getEmployee().getRole().name());
+        response.put("name", user.getEmployee().getFullName());
         response.put("id", user.getId());
-        response.put("phone", user.getPhone() != null ? user.getPhone() : "");
+        response.put("phone", user.getEmployee().getPhone());
         
         return ResponseEntity.ok(response);
     }
@@ -181,9 +273,7 @@ public class StaffController {
         String pin = request.get("pin");
 
         try {
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(email, pin)
-            );
+            authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(email, pin));
             return ResponseEntity.ok(Map.of("ok", true, "message", "Mã PIN chính xác."));
         } catch (Exception e) {
             return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Mã PIN cũ không chính xác."));
@@ -196,31 +286,23 @@ public class StaffController {
         String oldPin = request.get("oldPin");
         String newPin = request.get("newPin");
 
-        if (oldPin.equals(newPin)) {
-            return ResponseEntity.badRequest().body(Map.of("ok", false, "message", "Mã PIN mới không được trùng với mã PIN cũ."));
-        }
-
         Optional<User> userOpt = userRepository.findByEmail(email);
-        if (userOpt.isEmpty()) {
-            return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Tài khoản không tồn tại."));
-        }
-
-        User user = userOpt.get();
+        if (userOpt.isEmpty()) return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Tài khoản không tồn tại."));
 
         try {
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(email, oldPin)
-            );
+            authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(email, oldPin));
         } catch (Exception e) {
             return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Mã PIN cũ không chính xác."));
         }
 
-        PinChangeRequest pinRequest = new PinChangeRequest();
-        pinRequest.setUser(user);
-        pinRequest.setNewPin(passwordEncoder.encode(newPin));
-        pinChangeRequestRepository.save(pinRequest);
+        AccountRequest req = new AccountRequest();
+        req.setRequestCode("REQ" + System.currentTimeMillis());
+        req.setRequestType(RequestType.CHANGE_PIN);
+        req.setEmployee(userOpt.get().getEmployee());
+        req.setRequestPinHash(passwordEncoder.encode(newPin));
+        requestRepository.save(req);
 
-        return ResponseEntity.ok(Map.of("ok", true, "message", "Yêu cầu đổi mã PIN đã được gửi thành công và đang chờ duyệt."));
+        return ResponseEntity.ok(Map.of("ok", true, "message", "Yêu cầu đổi mã PIN đã được gửi thành công."));
     }
 
     @PostMapping("/forgot-pin")
@@ -229,75 +311,66 @@ public class StaffController {
         String newPin = request.get("newPin");
 
         Optional<User> userOpt = userRepository.findByEmail(email);
-        if (userOpt.isEmpty()) {
-            return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Email không tồn tại trong hệ thống."));
-        }
+        if (userOpt.isEmpty()) return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Email không tồn tại trong hệ thống."));
 
-        User user = userOpt.get();
+        AccountRequest req = new AccountRequest();
+        req.setRequestCode("REQ" + System.currentTimeMillis());
+        req.setRequestType(RequestType.RESET_PIN);
+        req.setEmployee(userOpt.get().getEmployee());
+        req.setRequestPinHash(passwordEncoder.encode(newPin));
+        requestRepository.save(req);
 
-        PinResetRequest resetReq = new PinResetRequest();
-        resetReq.setUser(user);
-        resetReq.setNewPin(passwordEncoder.encode(newPin));
-        pinResetRequestRepository.save(resetReq);
-
-        return ResponseEntity.ok(Map.of("ok", true, "message", "Yêu cầu cấp lại mã PIN đã được gửi thành công. Vui lòng chờ Quản lý duyệt."));
+        return ResponseEntity.ok(Map.of("ok", true, "message", "Yêu cầu cấp lại mã PIN đã được gửi thành công."));
     }
 
-    // ==============================================================
-    // ADMIN ENDPOINTS
-    // ==============================================================
-
     @GetMapping("/all")
-    public ResponseEntity<List<User>> getAllStaff() {
-        List<User> staff = userRepository.findByRole(Role.STAFF);
-        for(User u : staff) {
-            u.setPassword(null); // hide password hash
-        }
+    public ResponseEntity<List<Map<String, Object>>> getAllStaff() {
+        List<Map<String, Object>> staff = userRepository.findAllWithEmployeeByRole(EmployeeRole.STAFF).stream()
+                .map(u -> mapUserToOldStruct(u, null))
+                .collect(Collectors.toList());
         return ResponseEntity.ok(staff);
     }
 
     @GetMapping("/history/accounts")
-    public ResponseEntity<List<User>> getAccountHistory() {
-        List<User> history = userRepository.findByRoleAndStatusNot(Role.STAFF, UserStatus.PENDING);
-        for(User u : history) {
-            u.setPassword(null);
-        }
-        return ResponseEntity.ok(history);
+    public ResponseEntity<List<Map<String, Object>>> getAccountHistory() {
+        List<AccountRequest> history = requestRepository.findByRequestTypeAndStatusOrderByCreatedAtDesc(RequestType.REGISTER, RequestStatus.APPROVED);
+        history.addAll(requestRepository.findByRequestTypeAndStatusOrderByCreatedAtDesc(RequestType.REGISTER, RequestStatus.REJECTED));
+        return ResponseEntity.ok(history.stream().map(r -> mapRequestToOldStruct(r, r.getStatus().name())).collect(Collectors.toList()));
     }
 
     @GetMapping("/pin-change-requests/pending")
-    public ResponseEntity<List<PinChangeRequest>> getPendingPinRequests() {
-        List<PinChangeRequest> pending = pinChangeRequestRepository.findByStatusOrderByCreatedAtDesc(com.viepos.backend.models.PinChangeRequestStatus.PENDING);
-        for(PinChangeRequest req : pending) {
-            req.getUser().setPassword(null);
-        }
-        return ResponseEntity.ok(pending);
+    public ResponseEntity<List<Map<String, Object>>> getPendingPinRequests() {
+        List<AccountRequest> pending = requestRepository.findByRequestTypeAndStatusOrderByCreatedAtDesc(RequestType.CHANGE_PIN, RequestStatus.PENDING);
+        return ResponseEntity.ok(pending.stream().map(r -> mapRequestToOldStruct(r, "PENDING")).collect(Collectors.toList()));
     }
 
     @GetMapping("/pin-change-requests/history")
-    public ResponseEntity<List<PinChangeRequest>> getPinChangeHistory() {
-        List<PinChangeRequest> history = pinChangeRequestRepository.findByStatusInOrderByCreatedAtDesc(
-            List.of(com.viepos.backend.models.PinChangeRequestStatus.APPROVED, com.viepos.backend.models.PinChangeRequestStatus.REJECTED)
-        );
-        for(PinChangeRequest req : history) {
-            req.getUser().setPassword(null);
-        }
-        return ResponseEntity.ok(history);
+    public ResponseEntity<List<Map<String, Object>>> getPinChangeHistory() {
+        List<AccountRequest> history = requestRepository.findByRequestTypeAndStatusOrderByCreatedAtDesc(RequestType.CHANGE_PIN, RequestStatus.APPROVED);
+        history.addAll(requestRepository.findByRequestTypeAndStatusOrderByCreatedAtDesc(RequestType.CHANGE_PIN, RequestStatus.REJECTED));
+        return ResponseEntity.ok(history.stream().map(r -> mapRequestToOldStruct(r, r.getStatus().name())).collect(Collectors.toList()));
     }
 
     @PutMapping("/pin-change-requests/{id}/approve")
     public ResponseEntity<?> approvePinRequest(@PathVariable String id) {
-        Optional<PinChangeRequest> reqOpt = pinChangeRequestRepository.findById(id);
+        Optional<AccountRequest> reqOpt = requestRepository.findById(UUID.fromString(id));
         if (reqOpt.isPresent()) {
-            PinChangeRequest req = reqOpt.get();
-            req.setStatus(com.viepos.backend.models.PinChangeRequestStatus.APPROVED);
+            AccountRequest req = reqOpt.get();
+            User currentUser = getCurrentUser();
+            if (currentUser != null && currentUser.getEmployee() != null) {
+                req.setApprovedBy(currentUser.getEmployee());
+            }
+            req.setStatus(RequestStatus.APPROVED);
+            req.setApprovedAt(LocalDateTime.now());
             
-            // Update user password
-            User user = req.getUser();
-            user.setPassword(req.getNewPin());
+            User user = userRepository.findByEmail(req.getEmployee().getPersonalEmail()).orElseThrow();
+            user.setPassword(req.getRequestPinHash());
+            user.setPinChangeCount(user.getPinChangeCount() + 1);
             userRepository.save(user);
-            pinChangeRequestRepository.save(req);
-
+            requestRepository.save(req);
+            if (currentUser != null) {
+                auditLogService.log(currentUser, AuditAction.APPROVE, "account_requests", req.getId(), null, Map.of("requestCode", req.getRequestCode()));
+            }
             return ResponseEntity.ok(Map.of("message", "Đã duyệt yêu cầu đổi mã PIN."));
         }
         return ResponseEntity.notFound().build();
@@ -305,63 +378,150 @@ public class StaffController {
 
     @PutMapping("/pin-change-requests/{id}/reject")
     public ResponseEntity<?> rejectPinRequest(@PathVariable String id) {
-        Optional<PinChangeRequest> reqOpt = pinChangeRequestRepository.findById(id);
+        Optional<AccountRequest> reqOpt = requestRepository.findById(UUID.fromString(id));
         if (reqOpt.isPresent()) {
-            PinChangeRequest req = reqOpt.get();
-            req.setStatus(com.viepos.backend.models.PinChangeRequestStatus.REJECTED);
-            pinChangeRequestRepository.save(req);
-            return ResponseEntity.ok(Map.of("message", "Đã từ chối yêu cầu đổi mã PIN."));
+            AccountRequest req = reqOpt.get();
+            User currentUser = getCurrentUser();
+            if (currentUser != null && currentUser.getEmployee() != null) {
+                req.setApprovedBy(currentUser.getEmployee());
+            }
+            req.setStatus(RequestStatus.REJECTED);
+            req.setApprovedAt(LocalDateTime.now());
+            requestRepository.save(req);
+            if (currentUser != null) {
+                auditLogService.log(currentUser, AuditAction.REJECT, "account_requests", req.getId(), null, Map.of("requestCode", req.getRequestCode()));
+            }
+            return ResponseEntity.ok(Map.of("message", "Đã từ chối yêu cầu."));
         }
         return ResponseEntity.notFound().build();
     }
 
     @GetMapping("/pin-reset-requests/pending")
-    public ResponseEntity<List<PinResetRequest>> getPendingPinResets() {
-        List<PinResetRequest> pending = pinResetRequestRepository.findByStatusOrderByCreatedAtDesc(com.viepos.backend.models.PinChangeRequestStatus.PENDING);
-        for(PinResetRequest req : pending) {
-            req.getUser().setPassword(null);
-        }
-        return ResponseEntity.ok(pending);
+    public ResponseEntity<List<Map<String, Object>>> getPendingPinResets() {
+        List<AccountRequest> pending = requestRepository.findByRequestTypeAndStatusOrderByCreatedAtDesc(RequestType.RESET_PIN, RequestStatus.PENDING);
+        return ResponseEntity.ok(pending.stream().map(r -> mapRequestToOldStruct(r, "PENDING")).collect(Collectors.toList()));
     }
 
     @GetMapping("/pin-reset-requests/history")
-    public ResponseEntity<List<PinResetRequest>> getPinResetHistory() {
-        List<PinResetRequest> history = pinResetRequestRepository.findByStatusInOrderByCreatedAtDesc(
-            List.of(com.viepos.backend.models.PinChangeRequestStatus.APPROVED, com.viepos.backend.models.PinChangeRequestStatus.REJECTED)
-        );
-        for(PinResetRequest req : history) {
-            req.getUser().setPassword(null);
-        }
-        return ResponseEntity.ok(history);
+    public ResponseEntity<List<Map<String, Object>>> getPinResetHistory() {
+        List<AccountRequest> history = requestRepository.findByRequestTypeAndStatusOrderByCreatedAtDesc(RequestType.RESET_PIN, RequestStatus.APPROVED);
+        history.addAll(requestRepository.findByRequestTypeAndStatusOrderByCreatedAtDesc(RequestType.RESET_PIN, RequestStatus.REJECTED));
+        return ResponseEntity.ok(history.stream().map(r -> mapRequestToOldStruct(r, r.getStatus().name())).collect(Collectors.toList()));
     }
 
     @PutMapping("/pin-reset-requests/{id}/approve")
     public ResponseEntity<?> approvePinReset(@PathVariable String id) {
-        Optional<PinResetRequest> reqOpt = pinResetRequestRepository.findById(id);
-        if (reqOpt.isPresent()) {
-            PinResetRequest req = reqOpt.get();
-            req.setStatus(com.viepos.backend.models.PinChangeRequestStatus.APPROVED);
-            
-            // Update user password
-            User user = req.getUser();
-            user.setPassword(req.getNewPin());
-            userRepository.save(user);
-            pinResetRequestRepository.save(req);
-
-            return ResponseEntity.ok(Map.of("message", "Đã duyệt yêu cầu cấp lại mã PIN."));
-        }
-        return ResponseEntity.notFound().build();
+        return approvePinRequest(id); // Same logic
     }
 
     @PutMapping("/pin-reset-requests/{id}/reject")
     public ResponseEntity<?> rejectPinReset(@PathVariable String id) {
-        Optional<PinResetRequest> reqOpt = pinResetRequestRepository.findById(id);
-        if (reqOpt.isPresent()) {
-            PinResetRequest req = reqOpt.get();
-            req.setStatus(com.viepos.backend.models.PinChangeRequestStatus.REJECTED);
-            pinResetRequestRepository.save(req);
-            return ResponseEntity.ok(Map.of("message", "Đã từ chối yêu cầu cấp lại mã PIN."));
+        return rejectPinRequest(id); // Same logic
+    }
+
+    /** Create a new staff account directly (admin action, skips approval flow) */
+    @PostMapping
+    public ResponseEntity<?> createStaff(@RequestBody Map<String, String> body) {
+        String name = body.get("name");
+        String email = body.get("email");
+        String phone = body.get("phone");
+        String roleStr = body.getOrDefault("role", "STAFF");
+        String pin = body.getOrDefault("pin", "123456");
+        String password = body.get("password");
+
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Email không được để trống"));
         }
-        return ResponseEntity.notFound().build();
+        if (userRepository.existsByEmail(email)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Email này đã được đăng ký!"));
+        }
+
+        EmployeeRole empRole = resolveEmployeeRole(roleStr);
+
+        Employee emp = new Employee();
+        emp.setEmployeeId("EMP" + System.currentTimeMillis());
+        emp.setFullName(name);
+        emp.setPersonalEmail(email);
+        emp.setPhone(phone);
+        emp.setRole(empRole);
+        emp.setStatus(EmployeeStatus.ACTIVE);
+        employeeRepository.save(emp);
+
+        User user = new User();
+        user.setEmployee(emp);
+        user.setEmail(email);
+        if (empRole == EmployeeRole.STAFF) {
+            user.setPassword(passwordEncoder.encode(pin));
+        } else {
+            if (password == null || password.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("message", "Tài khoản quản lý cần mật khẩu đăng nhập"));
+            }
+            user.setPassword(passwordEncoder.encode(password));
+        }
+        userRepository.save(user);
+
+        return ResponseEntity.ok(mapUserToOldStruct(user, "APPROVED"));
+    }
+
+    /** Update staff info (name, phone, status) */
+    @PutMapping("/{id}")
+    public ResponseEntity<?> updateStaff(@PathVariable String id, @RequestBody Map<String, String> body) {
+        Optional<User> userOpt = userRepository.findById(UUID.fromString(id));
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message", "Nhân viên không tìm thấy"));
+        }
+        User user = userOpt.get();
+        Employee emp = user.getEmployee();
+
+        if (body.containsKey("name")) emp.setFullName(body.get("name"));
+        if (body.containsKey("phone")) emp.setPhone(body.get("phone"));
+        if (body.containsKey("email")) {
+            String newEmail = body.get("email").trim();
+            if (!newEmail.equalsIgnoreCase(user.getEmail()) && userRepository.existsByEmail(newEmail)) {
+                return ResponseEntity.badRequest().body(Map.of("message", "Email này đã được sử dụng"));
+            }
+            user.setEmail(newEmail);
+            emp.setPersonalEmail(newEmail);
+        }
+        if (body.containsKey("status")) {
+            try {
+                emp.setStatus(statusFromUi(body.get("status")));
+            } catch (IllegalArgumentException ignored) {}
+        }
+        if (body.containsKey("role")) {
+            emp.setRole(resolveEmployeeRole(body.get("role")));
+        }
+        employeeRepository.save(emp);
+        userRepository.save(user);
+        return ResponseEntity.ok(mapUserToOldStruct(user, null));
+    }
+
+    /** Soft-delete: deactivate staff account */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteStaff(@PathVariable String id) {
+        Optional<User> userOpt = userRepository.findById(UUID.fromString(id));
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message", "Nhân viên không tìm thấy"));
+        }
+        User user = userOpt.get();
+        Employee emp = user.getEmployee();
+        emp.setStatus(EmployeeStatus.RESIGNED);
+        employeeRepository.save(emp);
+        return ResponseEntity.ok(Map.of("message", "Đã vô hiệu hoá tài khoản nhân viên " + emp.getFullName()));
+    }
+
+    private static EmployeeRole resolveEmployeeRole(String roleStr) {
+        if (roleStr == null || roleStr.isBlank()) {
+            return EmployeeRole.STAFF;
+        }
+        String normalized = roleStr.trim().toUpperCase();
+        if ("MANAGER".equals(normalized) || "QUAN_LY".equals(normalized) || "QUẢN_LÝ".equalsIgnoreCase(roleStr.trim())) {
+            return EmployeeRole.ADMIN;
+        }
+        try {
+            return EmployeeRole.valueOf(normalized);
+        } catch (IllegalArgumentException e) {
+            return EmployeeRole.STAFF;
+        }
     }
 }

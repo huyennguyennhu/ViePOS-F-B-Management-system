@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { cardAPI, productAPI } from '../services/api';
 import { Plus, AlertTriangle, RefreshCw, Search, X } from 'lucide-react';
 import './PosTablesPage.css';
+import { mapPosProduct, posUnitPrice, type PosProduct } from '../utils/posProduct';
+import { isItemPackage4h, rowBackground } from '../utils/orderItemDisplay';
 
 interface Card {
   id: number;
@@ -18,48 +20,26 @@ interface CardSession {
   actualEndTime: string | null;
   orderId: string;
   status: string; // "Đang sử dụng", "Hoàn thành", "Quá giờ"
+  serviceType: string;
 }
 
-interface Category {
-  id: number;
-  name: string;
-}
+type Product = PosProduct;
 
-interface Product {
-  id: number;
-  sku: string;
-  name: string;
-  imageUrl: string | null;
-  status: string;
-  category: Category;
-}
 
-const INITIAL_PRODUCTS: Product[] = [
-  { id: 1, sku: 'CF-DEN-01', name: 'Cà phê đen', imageUrl: null, status: 'Đang bán', category: { id: 1, name: 'Cà phê' } },
-  { id: 2, sku: 'CF-SUA-02', name: 'Cà phê sữa', imageUrl: null, status: 'Đang bán', category: { id: 1, name: 'Cà phê' } },
-  { id: 3, sku: 'TS-DAC-01', name: 'Trà sữa đặc sản', imageUrl: null, status: 'Đang bán', category: { id: 2, name: 'Trà sữa' } },
-  { id: 4, sku: 'TS-TRU-02', name: 'Trà sữa truyền thống', imageUrl: null, status: 'Đang bán', category: { id: 2, name: 'Trà sữa' } },
-  { id: 5, sku: 'NE-DEP-01', name: 'Đẹp da', imageUrl: null, status: 'Đang bán', category: { id: 3, name: 'Nước ép' } },
-  { id: 6, sku: 'NE-DAN-02', name: 'Đẹp dáng', imageUrl: null, status: 'Đang bán', category: { id: 3, name: 'Nước ép' } },
-  { id: 7, sku: 'TR-NHT-01', name: 'Trà trái cây nhiệt đới', imageUrl: null, status: 'Đang bán', category: { id: 4, name: 'Trà' } },
-  { id: 8, sku: 'TR-MAN-02', name: 'Trà mãng cầu', imageUrl: null, status: 'Đang bán', category: { id: 4, name: 'Trà' } },
-  { id: 9, sku: 'TR-OIH-03', name: 'Trà ổi hồng', imageUrl: null, status: 'Đang bán', category: { id: 4, name: 'Trà' } },
-  { id: 10, sku: 'TR-HIB-04', name: 'Trà Hibiscus', imageUrl: null, status: 'Đang bán', category: { id: 4, name: 'Trà' } },
-  { id: 11, sku: 'TR-XOA-05', name: 'Trà xoài chanh leo', imageUrl: null, status: 'Đang bán', category: { id: 4, name: 'Trà' } },
-  { id: 12, sku: 'TR-DET-06', name: 'Trà detox nóng', imageUrl: null, status: 'Đang bán', category: { id: 4, name: 'Trà' } },
-  { id: 13, sku: 'AV-MILY-01', name: 'Mì ly', imageUrl: null, status: 'Đang bán', category: { id: 5, name: 'Ăn vặt' } },
-  { id: 14, sku: 'AV-BGAU-02', name: 'Bánh gấu', imageUrl: null, status: 'Đang bán', category: { id: 5, name: 'Ăn vặt' } },
-  { id: 15, sku: 'AV-BQUE-03', name: 'Bánh que', imageUrl: null, status: 'Đang bán', category: { id: 5, name: 'Ăn vặt' } },
-  { id: 16, sku: 'AV-BTM-04', name: 'Bánh tai mèo', imageUrl: null, status: 'Đang bán', category: { id: 5, name: 'Ăn vặt' } }
-];
 
 // Helper function to robustly parse UTC server time to browser local time
 const parseServerDate = (dateStr: string | null | undefined): Date => {
   if (!dateStr) return new Date();
-  const hasZ = dateStr.endsWith('Z');
-  const hasOffset = /([+-]\d{2}:\d{2})$/.test(dateStr);
-  const formattedStr = (hasZ || hasOffset) ? dateStr : `${dateStr}Z`;
-  return new Date(formattedStr);
+  return new Date(dateStr);
+};
+
+const lineUnitPrice = (
+  item: { sku?: string; serveType: 'takeaway' | 'dine_in'; duration: '4h' | 'all_day'; price?: number },
+  allProducts: Product[],
+): number => {
+  const product = allProducts.find(p => p.sku === item.sku);
+  if (product) return posUnitPrice(product, item.serveType, item.duration);
+  return Number(item.price ?? 0);
 };
 
 // Helper function to dynamically decode cart products stored inside orderId
@@ -81,14 +61,9 @@ const decodeOrderIdToItems = (orderId: string, allProducts: Product[]) => {
     
     const product = allProducts.find(p => p.sku === sku);
     if (!product) return null;
-    
-    let basePrice = 0;
-    if (serveType === 'takeaway') {
-      basePrice = 25000;
-    } else {
-      basePrice = duration === '4h' ? 35000 : 45000;
-    }
-    
+
+    const basePrice = posUnitPrice(product, serveType, duration);
+
     return {
       name: product.name,
       sku: product.sku,
@@ -107,7 +82,7 @@ export default function PosTablesPage() {
   const openCardNumber = location.state?.openCardNumber as string | undefined;
   const [cards, setCards] = useState<Card[]>([]);
   const [sessions, setSessions] = useState<CardSession[]>([]);
-  const [productList, setProductList] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [productList, setProductList] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -225,111 +200,73 @@ export default function PosTablesPage() {
         cardAPI.getCards(),
         cardAPI.getSessions(),
         productAPI.getProducts().catch(errProd => {
-          console.error('Không thể tải danh sách sản phẩm từ backend, sử dụng dữ liệu mặc định:', errProd);
+          console.error('Không thể tải sản phẩm:', errProd);
           return null;
         })
       ]);
 
       if (productsRes?.data) {
-        setProductList(productsRes.data);
+        setProductList(productsRes.data.map((p: Record<string, unknown>) => mapPosProduct(p)));
       }
-      
-      // Sort cards by card number ascending
-      const sortedCards = [...cardsRes.data].sort((a, b) => 
+
+      // Map backend CardStatus enum → frontend status string
+      const mapCardStatus = (s: string): string => {
+        if (s === 'AVAILABLE') return 'trống';
+        if (s === 'IN_USE')    return 'Đang sử dụng';
+        if (s === 'DISABLED')  return 'khóa';
+        return s;
+      };
+
+      // Map backend SessionStatus enum → frontend string
+      const mapSessionStatus = (s: string): string => {
+        if (s === 'ACTIVE')    return 'Đang sử dụng';
+        if (s === 'COMPLETED') return 'Hoàn thành';
+        if (s === 'EXPIRED')   return 'Quá giờ';
+        return s;
+      };
+
+      // Normalize cards: cardCode → cardNumber
+      const normalizedCards = cardsRes.data.map((c: any) => ({
+        id: c.id,
+        cardNumber: c.cardCode ?? c.cardNumber ?? '',
+        status: mapCardStatus(c.status),
+      }));
+
+      // Normalize sessions: startedAt→startTime, expectedEndAt→endTime, etc.
+      const normalizedSessions = sessionsRes.data.map((s: any) => ({
+        id: s.id,
+        card: {
+          id: s.card?.id,
+          cardNumber: s.card?.cardCode ?? s.card?.cardNumber ?? '',
+          status: mapCardStatus(s.card?.status ?? ''),
+        },
+        startTime: s.startedAt ?? s.startTime,
+        endTime: s.expectedEndAt ?? s.endTime,
+        actualEndTime: s.actualEndAt ?? s.actualEndTime ?? null,
+        orderId: s.order?.orderCode ?? s.orderId ?? '',
+        status: mapSessionStatus(s.status),
+        serviceType: s.serviceType,
+      }));
+
+      const sortedCards = [...normalizedCards].sort((a, b) =>
         parseInt(a.cardNumber) - parseInt(b.cardNumber)
       );
       setCards(sortedCards);
-      
-      // Sort sessions by start time descending
-      const sortedSessions = [...sessionsRes.data].sort((a, b) => 
+
+      const sortedSessions = [...normalizedSessions].sort((a, b) =>
         parseServerDate(b.startTime).getTime() - parseServerDate(a.startTime).getTime()
       );
       setSessions(sortedSessions);
     } catch (err) {
-      // Only show error on manual/initial load, not on silent polling
       if (!silent) {
         console.error('Lỗi khi tải dữ liệu thẻ/phiên:', err);
-        setErrorMessage('Không thể kết nối đến máy chủ. Đang sử dụng dữ liệu giả lập.');
+        setErrorMessage('Không thể kết nối đến máy chủ. Vui lòng thử lại sau.');
       }
-      // Seed fallback data for testing
-      setCards([
-        { id: 1, cardNumber: '04', status: 'quá giờ' },
-        { id: 2, cardNumber: '08', status: 'Đang sử dụng' },
-        { id: 3, cardNumber: '08', status: 'Đang sử dụng' }, // Let's have another card 08 for demo
-        { id: 4, cardNumber: '03', status: 'Đang sử dụng' },
-        { id: 5, cardNumber: '03', status: 'Đang sử dụng' }, // Second card 03 for Cả ngày
-        { id: 6, cardNumber: '07', status: 'trống' },
-        { id: 7, cardNumber: '11', status: 'khóa' },
-      ]);
-
-      const now = new Date();
-      const start4 = new Date(now.getTime() - (4 * 60 * 60 + 2 * 60 + 43) * 1000);
-      const end4 = new Date(start4.getTime() + 4 * 60 * 60 * 1000); // overdue now
-      
-      const start8 = new Date(now.getTime() - (3 * 60 * 60 + 45 * 60 + 58) * 1000);
-      const end8 = new Date(start8.getTime() + 4 * 60 * 60 * 1000); // 14m 2s left
-
-      const start8_2 = new Date(now.getTime() - (3 * 60 * 60 + 45 * 60 + 58) * 1000);
-      const end8_2 = new Date(start8_2.getTime() + 4 * 60 * 60 * 1000);
-
-      const start3 = new Date(now.getTime() - (5 * 60 + 17) * 1000);
-      const end3 = new Date(start3.getTime() + 4 * 60 * 60 * 1000); // 3h 54m 43s left
-
-      const start3_2 = new Date(now.getTime() - 1 * 60 * 60 * 1000);
-      const end3_2 = new Date(now);
-      end3_2.setHours(22, 0, 0, 0);
-
-      setSessions([
-        {
-          id: 1,
-          card: { id: 1, cardNumber: '04', status: 'quá giờ' },
-          startTime: start4.toISOString(),
-          endTime: end4.toISOString(),
-          actualEndTime: null,
-          orderId: 'ORD-MOCK-04',
-          status: 'Quá giờ'
-        },
-        {
-          id: 2,
-          card: { id: 2, cardNumber: '08', status: 'Đang sử dụng' },
-          startTime: start8.toISOString(),
-          endTime: end8.toISOString(),
-          actualEndTime: null,
-          orderId: 'ORD-MOCK-08-1',
-          status: 'Đang sử dụng'
-        },
-        {
-          id: 3,
-          card: { id: 3, cardNumber: '08', status: 'Đang sử dụng' },
-          startTime: start8_2.toISOString(),
-          endTime: end8_2.toISOString(),
-          actualEndTime: null,
-          orderId: 'ORD-MOCK-08-2',
-          status: 'Đang sử dụng'
-        },
-        {
-          id: 4,
-          card: { id: 4, cardNumber: '03', status: 'Đang sử dụng' },
-          startTime: start3.toISOString(),
-          endTime: end3.toISOString(),
-          actualEndTime: null,
-          orderId: 'ORD-MOCK-03-1',
-          status: 'Đang sử dụng'
-        },
-        {
-          id: 5,
-          card: { id: 5, cardNumber: '03', status: 'Đang sử dụng' },
-          startTime: start3_2.toISOString(),
-          endTime: end3_2.toISOString(),
-          actualEndTime: null,
-          orderId: 'ORD-MOCK-03-2',
-          status: 'Đang sử dụng'
-        }
-      ]);
     } finally {
       if (!silent) setLoading(false);
     }
   };
+
 
   useEffect(() => {
     fetchData();
@@ -419,9 +356,7 @@ export default function PosTablesPage() {
       return false;
     }
 
-    const diffMs = parseServerDate(activeSession.endTime).getTime() - parseServerDate(activeSession.startTime).getTime();
-    const is4h = [4, 8, 12, 16, 20, 24].some(h => Math.abs(diffMs - h * 60 * 60 * 1000) < 60000);
-    const durationType = is4h ? '4h' : 'all_day';
+    const durationType = activeSession.serviceType === 'PACKAGE_4H' ? '4h' : 'all_day';
 
     const remainingTimeMs = parseServerDate(activeSession.endTime).getTime() - currentTime.getTime();
     const isOverdue = remainingTimeMs < 0;
@@ -572,9 +507,7 @@ export default function PosTablesPage() {
               let durationType: '4h' | 'all_day' | null = null;
 
               if (activeSession) {
-                const diffMs = parseServerDate(activeSession.endTime).getTime() - parseServerDate(activeSession.startTime).getTime();
-                const is4h = [4, 8, 12, 16, 20, 24].some(h => Math.abs(diffMs - h * 60 * 60 * 1000) < 60000);
-                durationType = is4h ? '4h' : 'all_day';
+                durationType = activeSession.serviceType === 'PACKAGE_4H' ? '4h' : 'all_day';
 
                 const remainingTimeMs = parseServerDate(activeSession.endTime).getTime() - currentTime.getTime();
                 const isOverdue = remainingTimeMs < 0;
@@ -673,7 +606,7 @@ export default function PosTablesPage() {
                               className="card-plus-btn"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate('/pos/sales', { state: { lockedCardNumber: card.cardNumber } });
+                                navigate('/pos/sales', { state: { lockedCardNumber: card.cardNumber, isExtend: true } });
                               }}
                               title="Thêm món"
                             >
@@ -705,7 +638,7 @@ export default function PosTablesPage() {
                           className="card-wide-plus-btn"
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate('/pos/sales');
+                            navigate('/pos/sales', { state: { lockedCardNumber: card.cardNumber, isExtend: false } });
                           }}
                           title="Tạo phiên thẻ mới"
                         >
@@ -756,8 +689,7 @@ export default function PosTablesPage() {
                   </span>
                 </div>
                 {(() => {
-                  const diffMs = parseServerDate(selectedSessionForDetail.endTime).getTime() - parseServerDate(selectedSessionForDetail.startTime).getTime();
-                  const is4h = [4, 8, 12, 16, 20, 24].some(h => Math.abs(diffMs - h * 60 * 60 * 1000) < 60000);
+                  const is4h = selectedSessionForDetail.serviceType === 'PACKAGE_4H';
                   if (!is4h) return null;
                   
                   return (
@@ -823,18 +755,20 @@ export default function PosTablesPage() {
                         }
                         return items.map((item, index) => {
                           const serveText = item.serveType === 'takeaway' ? 'Mang đi' : `Tại chỗ ${item.duration === '4h' ? '4 giờ' : 'cả ngày'}`;
-                          const unitPrice = item.serveType === 'takeaway' ? 25000 : (item.duration === '4h' ? 35000 : 45000);
-                          
+                          const unitPrice = lineUnitPrice(item, productList);
+                          const isPackage4h = isItemPackage4h(item);
+                          const bg = rowBackground(isPackage4h);
+                          const cellStyle = { backgroundColor: bg };
+
                           return (
-                            <tr key={index}>
-                              {/* <td style={{ textAlign: 'center', fontSize: '14px' }}>{String(index + 1).padStart(2, '0')}</td> */}
-                              <td>
+                            <tr key={index} className={isPackage4h ? 'row-package-4h' : undefined}>
+                              <td style={cellStyle}>
                                 <div style={{ fontWeight: 600, fontSize: '14px', color: '#111' }}>{item.name}</div>
                                 <div style={{ fontSize: '12px', color: '#333', marginTop: '4px' }}>{serveText}</div>
                               </td>
-                              <td style={{ textAlign: 'right', fontSize: '13px' }}>{unitPrice.toLocaleString('vi-VN')}đ</td>
-                              <td style={{ textAlign: 'center', fontSize: '13px' }}>{String(item.quantity).padStart(2, '0')}</td>
-                              <td style={{ textAlign: 'right', fontSize: '13px' }} className="font-bold">
+                              <td style={{ ...cellStyle, textAlign: 'right', fontSize: '13px' }}>{unitPrice.toLocaleString('vi-VN')}đ</td>
+                              <td style={{ ...cellStyle, textAlign: 'center', fontSize: '13px' }}>{String(item.quantity).padStart(2, '0')}</td>
+                              <td style={{ ...cellStyle, textAlign: 'right', fontSize: '13px', fontWeight: 'bold' }}>
                                 {(unitPrice * item.quantity).toLocaleString('vi-VN')}đ
                               </td>
                             </tr>
@@ -857,7 +791,7 @@ export default function PosTablesPage() {
                       items = metadata?.items || [];
                     }
                     const total = items.reduce((sum, item) => {
-                      const unitPrice = item.serveType === 'takeaway' ? 25000 : (item.duration === '4h' ? 35000 : 45000);
+                      const unitPrice = lineUnitPrice(item, productList);
                       return sum + (unitPrice * item.quantity);
                     }, 0);
                     return total > 0 ? `${total.toLocaleString('vi-VN')}đ` : 'Chưa tính';

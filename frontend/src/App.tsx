@@ -21,6 +21,8 @@ import ProductListPage from './pages/ProductListPage';
 import CategoryListPage from './pages/CategoryListPage';
 import OrderManagementPage from './pages/OrderManagementPage';
 import TableManagementPage from './pages/TableManagementPage';
+import AdminRoute from './components/AdminRoute';
+import PosRoute from './components/PosRoute';
 
 function App() {
   return (
@@ -35,8 +37,9 @@ function App() {
         <Route path="/login/staff" element={<StaffLoginPage />} />
         <Route path="/register/staff" element={<StaffRegisterPage />} />
         
-        {/* Staff POS Layout */}
-        <Route path="/pos" element={<PosLayout />}>
+        {/* Staff POS Layout — STAFF + ADMIN (đăng nhập POS) */}
+        <Route path="/pos" element={<PosRoute />}>
+          <Route element={<PosLayout />}>
           <Route index element={<Navigate to="sales" replace />} />
           <Route path="home" element={<PosHomePage />} />
           <Route path="tables" element={<PosTablesPage />} />
@@ -44,9 +47,12 @@ function App() {
           <Route path="orders" element={<PosOrdersPage />} />
           <Route path="account" element={<PosAccountPage />} />
           <Route path="change-pin" element={<PosChangePinPage />} />
+          </Route>
         </Route>
 
-        <Route path="/dashboard" element={<DashboardLayout />}>
+        {/* Quản lý — chỉ ADMIN / ROOT_ADMIN */}
+        <Route path="/dashboard" element={<AdminRoute />}>
+          <Route element={<DashboardLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="reports/revenue" element={<RevenueReportPage />} />
           <Route path="staff" element={<StaffManagementPage />} />
@@ -60,6 +66,7 @@ function App() {
           <Route path="orders" element={<OrderManagementPage />} />
           <Route path="tables" element={<TableManagementPage />} />
           <Route path="*" element={<DashboardPage />} />
+          </Route>
         </Route>
         
         {/* Mặc định chuyển tới trang chủ chọn role */}

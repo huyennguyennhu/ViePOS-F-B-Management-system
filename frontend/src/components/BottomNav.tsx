@@ -49,7 +49,7 @@ export default function BottomNav() {
           <>
             {isActive && <div className="bottom-nav-indicator" />}
             <ShoppingCart size={22} className="bottom-nav-icon" />
-            <span>Đơn hàng</span>
+            <span>Kho hàng</span>
           </>
         )}
       </NavLink>

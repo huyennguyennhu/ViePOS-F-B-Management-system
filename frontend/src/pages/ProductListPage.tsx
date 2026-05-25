@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Search, Trash2, Eye, Edit2, Image as ImageIcon, X } from 'lucide-react';
+import api from '../services/api';
+import { showToast } from '../components/Toast';
 import './ProductListPage.css';
 
 const mockProducts = [
@@ -22,11 +24,12 @@ const categoryPrices: Record<string, { takeaway: string, h4: string, allday: str
 };
 
 export default function ProductListPage() {
-  const [products, setProducts] = useState(mockProducts);
+  const [products, setProducts] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [selectedProducts, setSelectedProducts] = useState<number[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   
   // Modal states
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -47,7 +50,8 @@ export default function ProductListPage() {
   const [newPrice4H, setNewPrice4H] = useState('');
   const [newPriceAllDay, setNewPriceAllDay] = useState('');
 
-  // Edit product form states
+  // Helper to get category object by name
+  const getCategoryByName = (name: string) => categories.find((c: any) => c.name.toUpperCase() === name.toUpperCase());
   const [editProductName, setEditProductName] = useState('');
   const [editCategory, setEditCategory] = useState('');
   const [editThreshold, setEditThreshold] = useState('5');
@@ -58,6 +62,73 @@ export default function ProductListPage() {
   const [editPriceTakeaway, setEditPriceTakeaway] = useState('');
   const [editPrice4H, setEditPrice4H] = useState('');
   const [editPriceAllDay, setEditPriceAllDay] = useState('');
+
+  const [categories, setCategories] = useState<any[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Fetch products from API
+  React.useEffect(() => {
+    fetchProducts();
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await api.get('/api/categories');
+      setCategories(res.data);
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+    }
+  };
+
+  // Auto-fill giá theo danh mục trong form THÊM
+  React.useEffect(() => {
+    if (!newCategory || isCustomPrice) return;
+    const cat = categories.find((c: any) => c.name === newCategory);
+    if (!cat) return;
+    const fmtNum = (n: number) => n > 0 ? n.toLocaleString('vi-VN').replace(/,/g, '.') : '';
+    setNewPriceTakeaway(fmtNum(Number(cat.defaultPriceTakeaway ?? 0)));
+    setNewPrice4H(fmtNum(Number(cat.defaultPricePackage4h ?? 0)));
+    setNewPriceAllDay(fmtNum(Number(cat.defaultPricePackageFullday ?? 0)));
+  }, [newCategory, categories]);
+
+  // Auto-fill giá theo danh mục trong form CHỈNH SỬa (khi toggle sang custom thì giữ nguyên)
+  React.useEffect(() => {
+    if (!editCategory || isEditCustomPrice) return;
+    const cat = categories.find((c: any) => c.name === editCategory);
+    if (!cat) return;
+    const fmtNum = (n: number) => n > 0 ? n.toLocaleString('vi-VN').replace(/,/g, '.') : '';
+    setEditPriceTakeaway(fmtNum(Number(cat.defaultPriceTakeaway ?? 0)));
+    setEditPrice4H(fmtNum(Number(cat.defaultPricePackage4h ?? 0)));
+    setEditPriceAllDay(fmtNum(Number(cat.defaultPricePackageFullday ?? 0)));
+  }, [editCategory, categories]);
+
+  const fetchProducts = async () => {
+    setIsLoading(true);
+    try {
+      const response = await api.get('/api/products');
+      const mappedData = response.data.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        sku: p.sku || '--',
+        category: p.categoryName || (p.category?.name) || 'Chưa phân loại',
+        categoryId: p.categoryId,
+        status: p.isActive ? 'Đang bán' : 'Ngừng bán',
+        threshold: p.minimumStock || 5,
+        priceTakeaway: p.priceTakeaway || 0,
+        price4H: p.pricePackage4h || 0,
+        priceAllDay: p.pricePackageFullday || 0,
+        isCustomPrice: p.isCustomPrice,
+        editHistory: [],
+        _original: p
+      }));
+      setProducts(mappedData);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const formatCurrency = (value: string) => {
     const numericValue = value.replace(/\D/g, '');
@@ -74,12 +145,14 @@ export default function ProductListPage() {
     setEditProductName(product.name);
     setEditCategory(product.category);
     setEditStatus(product.status);
-    setEditThreshold(product.threshold || '5');
+    setEditThreshold(String(product.threshold ?? 5));
     setEditImagePreview(null);
-    setIsEditCustomPrice(false);
-    setEditPriceTakeaway('');
-    setEditPrice4H('');
-    setEditPriceAllDay('');
+    const isCustom = product.isCustomPrice || false;
+    setIsEditCustomPrice(isCustom);
+    const fmtNum = (n: number) => n > 0 ? n.toLocaleString('vi-VN').replace(/,/g, '.') : '';
+    setEditPriceTakeaway(fmtNum(Number(product.priceTakeaway)));
+    setEditPrice4H(fmtNum(Number(product.price4H)));
+    setEditPriceAllDay(fmtNum(Number(product.priceAllDay)));
   };
 
   const handleEditImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -210,7 +283,7 @@ export default function ProductListPage() {
     }
   };
 
-  const handleSelectOne = (id: number) => {
+  const handleSelectOne = (id: string) => {
     if (selectedProducts.includes(id)) {
       setSelectedProducts(selectedProducts.filter(pid => pid !== id));
     } else {
@@ -223,12 +296,83 @@ export default function ProductListPage() {
     setDeleteConfirmText('');
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     const expectedText = `Xóa ${selectedProducts.length} sản phẩm`;
-    if (deleteConfirmText === expectedText) {
-      setProducts(products.filter(p => !selectedProducts.includes(p.id)));
+    if (deleteConfirmText !== expectedText) return;
+    setIsSubmitting(true);
+    try {
+      await Promise.all(selectedProducts.map(id => api.delete(`/api/products/${id}`)));
+      await fetchProducts();
       setSelectedProducts([]);
       setIsDeleteModalOpen(false);
+      showToast('Xóa sản phẩm thành công!');
+    } catch (err) {
+      showToast('Lỗi khi xóa sản phẩm. Vui lòng thử lại.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const parsePrice = (val: string) => parseInt(val.replace(/\D/g, '') || '0', 10);
+
+  const handleAddProduct = async () => {
+    if (!newProductName.trim() || !newCategory) return;
+    setIsSubmitting(true);
+    try {
+      const cat = categories.find((c: any) => c.name === newCategory);
+      await api.post('/api/products', {
+        name: newProductName.trim(),
+        sku: generatedSKU !== '--' ? generatedSKU : undefined,
+        categoryId: cat?.id,
+        minimumStock: parseInt(newThreshold || '5', 10),
+        isCustomPrice: isCustomPrice,
+        priceTakeaway: isCustomPrice ? parsePrice(newPriceTakeaway) : (cat?.defaultPriceTakeaway ?? 0),
+        pricePackage4h: isCustomPrice ? parsePrice(newPrice4H) : (cat?.defaultPricePackage4h ?? 0),
+        pricePackageFullday: isCustomPrice ? parsePrice(newPriceAllDay) : (cat?.defaultPricePackageFullday ?? 0),
+        status: 'Đang bán',
+      });
+      await fetchProducts();
+      // Reset form
+      setNewProductName('');
+      setNewCategory('');
+      setNewThreshold('5');
+      setImagePreview(null);
+      setIsCustomPrice(false);
+      setNewPriceTakeaway('');
+      setNewPrice4H('');
+      setNewPriceAllDay('');
+      setIsAddModalOpen(false);
+      showToast('Thêm sản phẩm thành công!');
+    } catch (err) {
+      showToast('Lỗi khi thêm sản phẩm. Vui lòng thử lại.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateProduct = async () => {
+    if (!editingProduct || !editProductName.trim() || !editCategory) return;
+    setIsSubmitting(true);
+    try {
+      const cat = categories.find((c: any) => c.name === editCategory);
+      await api.put(`/api/products/${editingProduct.id}`, {
+        name: editProductName.trim(),
+        sku: editGeneratedSKU !== '--' ? editGeneratedSKU : undefined,
+        categoryId: cat?.id,
+        minimumStock: parseInt(editThreshold || '5', 10),
+        isCustomPrice: isEditCustomPrice,
+        priceTakeaway: isEditCustomPrice ? parsePrice(editPriceTakeaway) : (cat?.defaultPriceTakeaway ?? 0),
+        pricePackage4h: isEditCustomPrice ? parsePrice(editPrice4H) : (cat?.defaultPricePackage4h ?? 0),
+        pricePackageFullday: isEditCustomPrice ? parsePrice(editPriceAllDay) : (cat?.defaultPricePackageFullday ?? 0),
+        status: editStatus === 'Đang bán' ? 'Đang bán' : 'Ngừng bán',
+      });
+      await fetchProducts();
+      setEditingProduct(null);
+      showToast('Cập nhật sản phẩm thành công!');
+    } catch (err) {
+      showToast('Lỗi khi cập nhật sản phẩm. Vui lòng thử lại.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -447,10 +591,19 @@ export default function ProductListPage() {
               <button 
                 className="btn-modal-submit btn-modal-delete"
                 disabled={deleteConfirmText !== `XÓA ${deletingProduct.name.toUpperCase()}`}
-                onClick={() => {
-                  setProducts(products.filter(p => p.id !== deletingProduct.id));
-                  setDeletingProduct(null);
-                  setDeleteConfirmText('');
+                onClick={async () => {
+                  setIsSubmitting(true);
+                  try {
+                    await api.delete(`/api/products/${deletingProduct.id}`);
+                    await fetchProducts();
+                    showToast('Xóa sản phẩm thành công!');
+                  } catch (err) {
+                    showToast('Lỗi khi xóa. Vui lòng thử lại.', 'error');
+                  } finally {
+                    setIsSubmitting(false);
+                    setDeletingProduct(null);
+                    setDeleteConfirmText('');
+                  }
                 }}
               >
                 Xác nhận xóa
@@ -516,9 +669,10 @@ export default function ProductListPage() {
                     value={newCategory}
                     onChange={(e) => setNewCategory(e.target.value)}
                   >
-                    <option value="" disabled hidden>- Chọn danh mục -</option>
-                    <option value="Cà phê">Cà phê</option>
-                    <option value="Trà">Trà</option>
+                  <option value="" disabled hidden>- Chọn danh mục -</option>
+                    {categories.filter((c: any) => c.name.toUpperCase() !== 'KHÁC' || c.productCount > 0).map((c: any) => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -570,19 +724,10 @@ export default function ProductListPage() {
                   </div>
                   <div className="toggle-wrapper">
                     <label className="toggle-switch">
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         checked={isCustomPrice}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          setIsCustomPrice(checked);
-                          if (checked) {
-                            const p = categoryPrices[newCategory] || { takeaway: '0', h4: '0', allday: '0' };
-                            setNewPriceTakeaway(p.takeaway);
-                            setNewPrice4H(p.h4);
-                            setNewPriceAllDay(p.allday);
-                          }
-                        }}
+                        onChange={(e) => setIsCustomPrice(e.target.checked)}
                       />
                       <span className="toggle-slider"></span>
                     </label>
@@ -594,36 +739,39 @@ export default function ProductListPage() {
                   <div className="pricing-col">
                     <label>Mang Đi</label>
                     <div className="price-input-wrapper">
-                      <input 
-                        type="text" 
-                        className={`form-input text-center ${!isCustomPrice ? 'input-readonly' : ''}`} 
-                        value={isCustomPrice ? newPriceTakeaway : (categoryPrices[newCategory]?.takeaway || '0')}
+                      <input
+                        type="text"
+                        className={`form-input text-center ${!isCustomPrice ? 'input-readonly' : ''}`}
+                        value={newPriceTakeaway}
                         onChange={handlePriceChange(setNewPriceTakeaway)}
-                        readOnly={!isCustomPrice} 
+                        readOnly={!isCustomPrice}
+                        placeholder="0"
                       />
                     </div>
                   </div>
                   <div className="pricing-col">
                     <label>Tại chỗ 4H</label>
                     <div className="price-input-wrapper">
-                      <input 
-                        type="text" 
-                        className={`form-input text-center ${!isCustomPrice ? 'input-readonly' : ''}`} 
-                        value={isCustomPrice ? newPrice4H : (categoryPrices[newCategory]?.h4 || '0')}
+                      <input
+                        type="text"
+                        className={`form-input text-center ${!isCustomPrice ? 'input-readonly' : ''}`}
+                        value={newPrice4H}
                         onChange={handlePriceChange(setNewPrice4H)}
-                        readOnly={!isCustomPrice} 
+                        readOnly={!isCustomPrice}
+                        placeholder="0"
                       />
                     </div>
                   </div>
                   <div className="pricing-col">
                     <label>Tại chỗ Cả ngày</label>
                     <div className="price-input-wrapper">
-                      <input 
-                        type="text" 
-                        className={`form-input text-center ${!isCustomPrice ? 'input-readonly' : ''}`} 
-                        value={isCustomPrice ? newPriceAllDay : (categoryPrices[newCategory]?.allday || '0')}
+                      <input
+                        type="text"
+                        className={`form-input text-center ${!isCustomPrice ? 'input-readonly' : ''}`}
+                        value={newPriceAllDay}
                         onChange={handlePriceChange(setNewPriceAllDay)}
-                        readOnly={!isCustomPrice} 
+                        readOnly={!isCustomPrice}
+                        placeholder="0"
                       />
                     </div>
                   </div>
@@ -633,11 +781,12 @@ export default function ProductListPage() {
 
             <div className="add-modal-footer">
               <button className="btn-modal-outline" onClick={() => setIsAddModalOpen(false)}>HỦY</button>
-              <button 
+              <button
                 className="btn-modal-solid"
-                disabled={!newProductName.trim() || !newCategory || !newThreshold.trim() || !newPriceTakeaway || !newPrice4H || !newPriceAllDay}
+                disabled={isSubmitting || !newProductName.trim() || !newCategory || !newThreshold.trim()}
+                onClick={handleAddProduct}
               >
-                THÊM
+                {isSubmitting ? 'ĐANG LƯU...' : 'THÊM'}
               </button>
             </div>
           </div>
@@ -697,10 +846,10 @@ export default function ProductListPage() {
 
                 <div className="form-group">
                   <label>Ngưỡng Tồn Kho</label>
-                  <input 
-                    type="number" 
-                    className="form-input input-readonly" 
-                    value="10"
+                  <input
+                    type="number"
+                    className="form-input input-readonly"
+                    value={viewingProduct.threshold ?? 5}
                     readOnly
                   />
                 </div>
@@ -742,19 +891,25 @@ export default function ProductListPage() {
                   <div className="pricing-col">
                     <label>Mang Đi</label>
                     <div className="price-input-wrapper">
-                      <input type="text" className="form-input input-readonly text-center" value="25.000" readOnly />
+                      <input type="text" className="form-input input-readonly text-center"
+                        value={Number(viewingProduct.priceTakeaway || 0).toLocaleString('vi-VN').replace(/,/g, '.')}
+                        readOnly />
                     </div>
                   </div>
                   <div className="pricing-col">
                     <label>Tại chỗ 4H</label>
                     <div className="price-input-wrapper">
-                      <input type="text" className="form-input input-readonly text-center" value="35.000" readOnly />
+                      <input type="text" className="form-input input-readonly text-center"
+                        value={Number(viewingProduct.price4H || 0).toLocaleString('vi-VN').replace(/,/g, '.')}
+                        readOnly />
                     </div>
                   </div>
                   <div className="pricing-col">
                     <label>Tại chỗ Cả ngày</label>
                     <div className="price-input-wrapper">
-                      <input type="text" className="form-input input-readonly text-center" value="35.000" readOnly />
+                      <input type="text" className="form-input input-readonly text-center"
+                        value={Number(viewingProduct.priceAllDay || 0).toLocaleString('vi-VN').replace(/,/g, '.')}
+                        readOnly />
                     </div>
                   </div>
                 </div>
@@ -862,9 +1017,9 @@ export default function ProductListPage() {
                     onChange={(e) => setEditCategory(e.target.value)}
                   >
                     <option value="" disabled hidden>- Chọn danh mục -</option>
-                    <option value="Cà phê">Cà phê</option>
-                    <option value="Trà">Trà</option>
-                    <option value="Đồ ăn">Đồ ăn</option>
+                    {categories.filter((c: any) => c.name.toUpperCase() !== 'KHÁC' || c.productCount > 0).map((c: any) => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -955,7 +1110,7 @@ export default function ProductListPage() {
                       <input 
                         type="text" 
                         className={`form-input text-center ${!isEditCustomPrice ? 'input-readonly' : ''}`} 
-                        value={isEditCustomPrice ? editPriceTakeaway : (categoryPrices[editCategory]?.takeaway || '0')}
+                                        value={isEditCustomPrice ? editPriceTakeaway : (getCategoryByName(editCategory)?.defaultPriceTakeaway?.toString() || '0')}
                         onChange={handlePriceChange(setEditPriceTakeaway)}
                         readOnly={!isEditCustomPrice} 
                       />
@@ -967,7 +1122,7 @@ export default function ProductListPage() {
                       <input 
                         type="text" 
                         className={`form-input text-center ${!isEditCustomPrice ? 'input-readonly' : ''}`} 
-                        value={isEditCustomPrice ? editPrice4H : (categoryPrices[editCategory]?.h4 || '0')}
+                                        value={isEditCustomPrice ? editPrice4H : (getCategoryByName(editCategory)?.defaultPricePackage4h?.toString() || '0')}
                         onChange={handlePriceChange(setEditPrice4H)}
                         readOnly={!isEditCustomPrice} 
                       />
@@ -979,7 +1134,7 @@ export default function ProductListPage() {
                       <input 
                         type="text" 
                         className={`form-input text-center ${!isEditCustomPrice ? 'input-readonly' : ''}`} 
-                        value={isEditCustomPrice ? editPriceAllDay : (categoryPrices[editCategory]?.allday || '0')}
+                                        value={isEditCustomPrice ? editPriceAllDay : (getCategoryByName(editCategory)?.defaultPricePackageFullday?.toString() || '0')}
                         onChange={handlePriceChange(setEditPriceAllDay)}
                         readOnly={!isEditCustomPrice} 
                       />
@@ -997,16 +1152,18 @@ export default function ProductListPage() {
 
             <div className="add-modal-footer">
               <button className="btn-modal-outline" onClick={() => setEditingProduct(null)}>HỦY</button>
-              <button 
+              <button
                 className="btn-modal-solid"
-                disabled={!editProductName.trim() || !editCategory || !editThreshold.trim() || !editPriceTakeaway || !editPrice4H || !editPriceAllDay}
+                disabled={isSubmitting || !editProductName.trim() || !editCategory || !editThreshold.trim()}
+                onClick={handleUpdateProduct}
               >
-                LƯU
+                {isSubmitting ? 'ĐANG LƯU...' : 'LƯU'}
               </button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }

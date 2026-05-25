@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Eye, Edit2, Trash2, ChevronDown, ChevronUp, X } from 'lucide-react';
+import api from '../services/api';
+import { showToast } from '../components/Toast';
 import './CategoryListPage.css';
 
 const mockCategories = [
@@ -56,7 +58,8 @@ const mockCategories = [
 ];
 
 export default function CategoryListPage() {
-  const [categories, setCategories] = useState(mockCategories);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCats, setExpandedCats] = useState<number[]>([]);
 
@@ -88,41 +91,65 @@ export default function CategoryListPage() {
   const [bulkPriceAllDay, setBulkPriceAllDay] = useState('');
   const [selectedBulkCategories, setSelectedBulkCategories] = useState<number[]>([]);
 
-  const handleDeleteCategory = () => {
-    if (!deletingCategory) return;
-    
-    setCategories(prev => {
-      // Create a copy of categories without the deleted one
-      let newCategories = prev.filter(c => c.id !== deletingCategory.id);
-      
-      // Move products
-      if (deletingCategory.products && deletingCategory.products.length > 0) {
-        let khacCategory = newCategories.find(c => c.name.toUpperCase() === 'KHÁC');
-        
-        if (!khacCategory) {
-          khacCategory = {
-            id: 999,
-            name: 'KHÁC',
-            count: 0,
-            priceTakeaway: '0', price4H: '0', priceAllDay: '0',
-            lastUpdated: 'Vừa xong',
-            updatedBy: 'Hệ Thống',
-            products: []
-          };
-          newCategories.push(khacCategory);
-        } else {
-          khacCategory = { ...khacCategory };
-          newCategories = newCategories.map(c => c.id === khacCategory!.id ? khacCategory! : c);
-        }
-        
-        khacCategory.products = [...khacCategory.products, ...deletingCategory.products];
-        khacCategory.count = khacCategory.products.length;
+  // Fetch categories from API
+  React.useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    setIsLoading(true);
+    try {
+      const [catRes, prodRes] = await Promise.all([
+        api.get('/api/categories'),
+        api.get('/api/products'),
+      ]);
+
+      // Group product names by category id
+      const productsByCategory: Record<string, string[]> = {};
+      for (const p of prodRes.data) {
+        const catId = p.categoryId || p.category?.id;
+        if (!catId) continue;
+        if (!productsByCategory[catId]) productsByCategory[catId] = [];
+        productsByCategory[catId].push(p.name);
       }
-      
-      return newCategories;
-    });
-    
-    setDeletingCategory(null);
+
+      const mappedData = catRes.data.map((cat: any) => ({
+        id: cat.id,
+        name: cat.name,
+        count: cat.productCount || 0,
+        priceTakeaway: formatCurrencyFromNumber(cat.defaultPriceTakeaway),
+        price4H: formatCurrencyFromNumber(cat.defaultPricePackage4h),
+        priceAllDay: formatCurrencyFromNumber(cat.defaultPricePackageFullday),
+        lastUpdated: cat.updatedAt || cat.createdAt,
+        updatedBy: 'Admin',
+        products: productsByCategory[cat.id] || [],
+        _original: cat
+      }));
+      setCategories(mappedData);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const formatCurrencyFromNumber = (value: number) => {
+    if (value === undefined || value === null) return '0';
+    return value.toLocaleString('vi-VN');
+  };
+
+  const handleDeleteCategory = async () => {
+    if (!deletingCategory) return;
+    try {
+      await api.delete(`/api/categories/${deletingCategory.id}`);
+      setDeletingCategory(null);
+      setDeleteConfirmText('');
+      await fetchCategories(); // Reload from server
+      showToast('Xóa danh mục thành công!');
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      showToast('Không thể xóa danh mục. Vui lòng thử lại.', 'error');
+    }
   };
 
   const openEditModal = (category: any) => {
@@ -133,29 +160,36 @@ export default function CategoryListPage() {
     setEditPriceAllDay(category.priceAllDay || '');
   };
 
-  const handleBulkPriceUpdate = () => {
-    setCategories(prev => prev.map(c => {
-      if (selectedBulkCategories.includes(c.id)) {
-        return {
-          ...c,
-          priceTakeaway: bulkPriceTakeaway,
-          price4H: bulkPrice4H,
-          priceAllDay: bulkPriceAllDay,
-          lastUpdated: 'Vừa xong',
-          updatedBy: 'Hệ Thống'
-        };
-      }
-      return c;
-    }));
-    setIsBulkPriceModalOpen(false);
-    setBulkPriceTakeaway('');
-    setBulkPrice4H('');
-    setBulkPriceAllDay('');
+  const parsePriceToNumber = (priceStr: string): number => {
+    return Number(priceStr.replace(/\./g, '').replace(/,/g, '').trim()) || 0;
+  };
+
+  const handleBulkPriceUpdate = async () => {
+    try {
+      const updates = selectedBulkCategories.map(catId =>
+        api.put(`/api/categories/${catId}`, {
+          defaultPriceTakeaway: parsePriceToNumber(bulkPriceTakeaway),
+          defaultPricePackage4h: parsePriceToNumber(bulkPrice4H),
+          defaultPricePackageFullday: parsePriceToNumber(bulkPriceAllDay),
+        })
+      );
+      await Promise.all(updates);
+      setIsBulkPriceModalOpen(false);
+      setBulkPriceTakeaway('');
+      setBulkPrice4H('');
+      setBulkPriceAllDay('');
+      setSelectedBulkCategories([]);
+      await fetchCategories();
+      showToast('Cập nhật giá hàng loạt thành công!');
+    } catch (error) {
+      console.error('Error updating bulk prices:', error);
+      showToast('Không thể cập nhật giá. Vui lòng thử lại.', 'error');
+    }
   };
 
   const handleSelectAllBulk = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      setSelectedBulkCategories(categories.map(c => c.id));
+      setSelectedBulkCategories(categories.filter(c => c.name.toUpperCase() !== 'KHÁC' || c.count > 0).map(c => c.id));
     } else {
       setSelectedBulkCategories([]);
     }
@@ -177,9 +211,22 @@ export default function CategoryListPage() {
     setter(formatCurrency(e.target.value));
   };
 
-  const filteredCategories = categories.filter(cat => 
-    cat.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Check if a name already exists (for Add: check all; for Edit: exclude current)
+  const isNameDuplicate = (name: string, excludeId?: string) => {
+    const trimmed = name.trim().toUpperCase();
+    if (!trimmed) return false;
+    return categories.some(c =>
+      c.name.toUpperCase() === trimmed && c.id !== excludeId
+    );
+  };
+
+  const filteredCategories = categories
+    .filter(cat => cat.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    .filter(cat => {
+      // Hide KHÁC category when it has no products
+      if (cat.name.toUpperCase() === 'KHÁC' && cat.count === 0) return false;
+      return true;
+    });
 
   const toggleExpand = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -197,7 +244,7 @@ export default function CategoryListPage() {
         <div style={{ display: 'flex', gap: '12px' }}>
           <button className="btn-add-category outline" onClick={() => {
             setIsBulkPriceModalOpen(true);
-            setSelectedBulkCategories(categories.map(c => c.id));
+            setSelectedBulkCategories(categories.filter(c => c.name.toUpperCase() !== 'KHÁC' || c.count > 0).map(c => c.id));
           }}>
             Cấu hình giá hàng loạt
           </button>
@@ -297,14 +344,23 @@ export default function CategoryListPage() {
                 <label>Tên Danh Mục <span style={{ color: 'red' }}>*</span></label>
                 <input 
                   type="text" 
-                  className={`modal-input ${newCategoryName.trim().toUpperCase() === 'KHÁC' ? 'error' : ''}`} 
+                  className={`modal-input ${
+                    newCategoryName.trim().toUpperCase() === 'KHÁC' ||
+                    isNameDuplicate(newCategoryName)
+                      ? 'error' : ''
+                  }`} 
                   placeholder="Nhập tên danh mục..."
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
                 />
                 {newCategoryName.trim().toUpperCase() === 'KHÁC' && (
-                  <span style={{ color: '#dc3545', fontSize: '13px', marginTop: '4px' }}>
+                  <span style={{ color: '#dc3545', fontSize: '13px', marginTop: '4px', display: 'block' }}>
                     Tên "KHÁC" là danh mục hệ thống, vui lòng chọn tên khác.
+                  </span>
+                )}
+                {newCategoryName.trim().toUpperCase() !== 'KHÁC' && isNameDuplicate(newCategoryName) && (
+                  <span style={{ color: '#dc3545', fontSize: '13px', marginTop: '4px', display: 'block' }}>
+                    Danh mục "{newCategoryName.trim().toUpperCase()}" đã tồn tại trong cơ sở dữ liệu.
                   </span>
                 )}
               </div>
@@ -351,8 +407,32 @@ export default function CategoryListPage() {
               <button className="btn-modal-cancel outline" onClick={() => setIsAddModalOpen(false)}>HỦY</button>
               <button 
                 className="btn-modal-submit" 
-                onClick={() => setIsAddModalOpen(false)}
-                disabled={!newCategoryName.trim() || newCategoryName.trim().toUpperCase() === 'KHÁC' || !priceTakeaway || !price4H || !priceAllDay}
+                disabled={
+                  !newCategoryName.trim() ||
+                  newCategoryName.trim().toUpperCase() === 'KHÁC' ||
+                  isNameDuplicate(newCategoryName) ||
+                  !priceTakeaway || !price4H || !priceAllDay
+                }
+                onClick={async () => {
+                  try {
+                    await api.post('/api/categories', {
+                      name: newCategoryName.trim().toUpperCase(),
+                      defaultPriceTakeaway: parsePriceToNumber(priceTakeaway),
+                      defaultPricePackage4h: parsePriceToNumber(price4H),
+                      defaultPricePackageFullday: parsePriceToNumber(priceAllDay),
+                    });
+                    setIsAddModalOpen(false);
+                    setNewCategoryName('');
+                    setPriceTakeaway('');
+                    setPrice4H('');
+                    setPriceAllDay('');
+                    await fetchCategories();
+                    showToast('Thêm danh mục thành công!');
+                  } catch (err) {
+                    console.error(err);
+                    showToast('Không thể thêm danh mục. Vui lòng thử lại.', 'error');
+                  }
+                }}
               >
                 THÊM
               </button>
@@ -450,10 +530,15 @@ export default function CategoryListPage() {
                 <label>Tên Danh Mục <span style={{ color: 'red' }}>*</span></label>
                 <input 
                   type="text" 
-                  className="modal-input" 
+                  className={`modal-input ${isNameDuplicate(editCategoryName, editingCategory?.id) ? 'error' : ''}`}
                   value={editCategoryName}
                   onChange={(e) => setEditCategoryName(e.target.value)}
                 />
+                {isNameDuplicate(editCategoryName, editingCategory?.id) && (
+                  <span style={{ color: '#dc3545', fontSize: '13px', marginTop: '4px', display: 'block' }}>
+                    Danh mục "{editCategoryName.trim().toUpperCase()}" đã tồn tại trong cơ sở dữ liệu.
+                  </span>
+                )}
               </div>
 
               <div className="form-group">
@@ -495,8 +580,27 @@ export default function CategoryListPage() {
               <button className="btn-modal-cancel outline" onClick={() => setEditingCategory(null)}>HỦY</button>
               <button 
                 className="btn-modal-submit" 
-                onClick={() => setEditingCategory(null)}
-                disabled={!editCategoryName.trim() || !editPriceTakeaway || !editPrice4H || !editPriceAllDay}
+                disabled={
+                  !editCategoryName.trim() ||
+                  isNameDuplicate(editCategoryName, editingCategory?.id) ||
+                  !editPriceTakeaway || !editPrice4H || !editPriceAllDay
+                }
+                onClick={async () => {
+                  try {
+                    await api.put(`/api/categories/${editingCategory.id}`, {
+                      name: editCategoryName.trim().toUpperCase(),
+                      defaultPriceTakeaway: parsePriceToNumber(editPriceTakeaway),
+                      defaultPricePackage4h: parsePriceToNumber(editPrice4H),
+                      defaultPricePackageFullday: parsePriceToNumber(editPriceAllDay),
+                    });
+                    setEditingCategory(null);
+                    await fetchCategories();
+                    showToast('Cập nhật danh mục thành công!');
+                  } catch (err) {
+                    console.error(err);
+                    showToast('Không thể lưu danh mục. Vui lòng thử lại.', 'error');
+                  }
+                }}
               >
                 LƯU
               </button>
@@ -619,7 +723,7 @@ export default function CategoryListPage() {
                         <th style={{ width: '40px', textAlign: 'center' }}>
                           <input 
                             type="checkbox" 
-                            checked={selectedBulkCategories.length === categories.length && categories.length > 0}
+                            checked={selectedBulkCategories.length === categories.filter(c => c.name.toUpperCase() !== 'KHÁC' || c.count > 0).length && categories.filter(c => c.name.toUpperCase() !== 'KHÁC' || c.count > 0).length > 0}
                             onChange={handleSelectAllBulk}
                             style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: '#256e05' }}
                           />
@@ -631,7 +735,7 @@ export default function CategoryListPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {categories.map(cat => (
+                      {categories.filter(c => c.name.toUpperCase() !== 'KHÁC' || c.count > 0).map(cat => (
                         <tr key={cat.id} style={{ backgroundColor: selectedBulkCategories.includes(cat.id) ? '#f2f9f0' : 'transparent' }}>
                           <td style={{ textAlign: 'center' }}>
                             <input 
@@ -666,6 +770,7 @@ export default function CategoryListPage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }
