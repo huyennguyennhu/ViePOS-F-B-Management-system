@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, X, Eye, EyeOff } from 'lucide-react';
 import { authAPI } from '../services/api';
-import { canAccessManagement, canAccessPos, isStaffRole, getAuthRole } from '../utils/auth';
+import { canAccessManagement, canAccessPos, isStaffRole, getAuthRole, MANAGEMENT_HOME } from '../utils/auth';
 import './StaffLoginPage.css';
 
 export default function StaffLoginPage() {
@@ -39,7 +39,7 @@ export default function StaffLoginPage() {
 
   useEffect(() => {
     if (canAccessManagement()) {
-      navigate('/dashboard', { replace: true });
+      navigate(MANAGEMENT_HOME, { replace: true });
       return;
     }
     if (canAccessPos() && isStaffRole(getAuthRole())) {
@@ -111,7 +111,10 @@ export default function StaffLoginPage() {
           localStorage.setItem('role', res.data.role);
           localStorage.setItem('staffEmail', email);
           if (res.data.name) localStorage.setItem('staffName', res.data.name);
-          if (res.data.id) localStorage.setItem('staffId', res.data.id);
+          // staffId phải là employeeId dạng "EMPxxx" để filter đơn hàng theo nhân viên
+          // res.data.employeeId = "EMPxxx" (Employee.employeeId), res.data.id = UUID của User
+          if (res.data.employeeId) localStorage.setItem('staffId', res.data.employeeId);
+          else if (res.data.id) localStorage.setItem('staffId', String(res.data.id));
           if (res.data.phone) localStorage.setItem('staffPhone', res.data.phone);
           
           const now = new Date();

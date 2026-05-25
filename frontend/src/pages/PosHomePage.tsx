@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Calendar, DollarSign, FileText, Package, ChevronDown, X } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Calendar, DollarSign, FileText, Package, ChevronDown, X, User } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { orderAPI, unwrapOrdersList } from '../services/api';
 import { getCachedOrderItems, mapCachedItemToDetailRow } from '../utils/orderItemsCache';
@@ -7,6 +7,13 @@ import api from '../services/api';
 import { PIE_SERVICE_COLORS } from '../constants/serviceChartColors';
 import { buildPaymentPieSlices, formatPaymentPieLine, paymentPieColorForLabel, withPaymentPieColors } from '../utils/paymentPieData';
 import { renderPaymentPieLabel } from '../utils/paymentPieChartLabel';
+import {
+  applyFromDateChange,
+  applyToDateChange,
+  getTodayYmd,
+  isValidDateRange,
+} from '../utils/dateRangeFilter';
+import { splitDateTimeVN } from '../utils/dateTime';
 import './PosHomePage.css';
 
 const renderCustomizedLabel = ({ cx, cy, midAngle, outerRadius, percent }: any) => {
@@ -46,60 +53,99 @@ export default function PosHomePage() {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [orderDetail, setOrderDetail] = useState<any>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getTodayYmd();
+
+  // Lấy thông tin nhân viên hiện tại (private/cá nhân)
+  const currentStaffId = localStorage.getItem('staffId') || '';
+  const currentStaffName = localStorage.getItem('staffName') || 'Tôi';
 
   // Stats
-  const [stats, setStats] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [totalProducts, setTotalProducts] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
 
-  const getDateRange = () => {
+  const formatLocalDate = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const startOfWeekMonday = (date: Date) => {
+    const d = new Date(date);
+    const dow = d.getDay();
+    const diff = dow === 0 ? 6 : dow - 1;
+    d.setDate(d.getDate() - diff);
+    return d;
+  };
+
+  const activeRange = useMemo(() => {
     const now = new Date();
+    if (timeFilter === 'custom') {
+      return isValidDateRange(startDate, endDate)
+        ? { fromDate: startDate, toDate: endDate }
+        : null;
+    }
     if (timeFilter === 'today') {
       return { fromDate: todayStr, toDate: todayStr };
     }
     if (timeFilter === 'yesterday') {
-      const y = new Date(now); y.setDate(y.getDate() - 1);
-      const ys = y.toISOString().split('T')[0];
+      const y = new Date(now);
+      y.setDate(y.getDate() - 1);
+      const ys = formatLocalDate(y);
       return { fromDate: ys, toDate: ys };
     }
     if (timeFilter === 'week') {
-      const mon = new Date(now); mon.setDate(now.getDate() - now.getDay() + 1);
-      return { fromDate: mon.toISOString().split('T')[0], toDate: todayStr };
+      return {
+        fromDate: formatLocalDate(startOfWeekMonday(now)),
+        toDate: todayStr,
+      };
     }
     if (timeFilter === 'month') {
       const first = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { fromDate: first.toISOString().split('T')[0], toDate: todayStr };
-    }
-    if (timeFilter === 'custom' && startDate && endDate) {
-      return { fromDate: startDate, toDate: endDate };
+      return { fromDate: formatLocalDate(first), toDate: todayStr };
     }
     return { fromDate: todayStr, toDate: todayStr };
-  };
+  }, [timeFilter, startDate, endDate, todayStr]);
 
   useEffect(() => {
-    if (timeFilter === 'custom' && (!startDate || !endDate)) return;
+    if (!activeRange) return;
+
+    let cancelled = false;
     const fetchAll = async () => {
       setIsLoading(true);
+      setSelectedOrderId(null);
+      setOrderDetail(null);
       try {
-        const range = getDateRange();
-        const [statsRes, ordersRes, prodRes] = await Promise.all([
-          orderAPI.getStats(range),
-          orderAPI.getOrders({ ...range, status: 'COMPLETED', page: 0, size: 200 }),
+        // Lấy chỉ đơn của nhân viên hiện tại (private)
+        const [ordersRes, prodRes] = await Promise.all([
+          orderAPI.getOrders({
+            ...activeRange,
+            status: 'COMPLETED',
+            page: 0,
+            size: 200,
+            ...(currentStaffId ? { employeeId: currentStaffId } : {}),
+          }),
           api.get('/api/products'),
         ]);
-        setStats(statsRes.data);
-        setOrders(unwrapOrdersList(ordersRes.data));
+        if (cancelled) return;
+        const list = unwrapOrdersList(ordersRes.data);
+        setOrders(list);
         setTotalProducts((prodRes.data || []).filter((p: any) => p.isActive).length);
       } catch (err) {
         console.error(err);
+        if (!cancelled) {
+          setOrders([]);
+        }
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
     fetchAll();
-  }, [timeFilter, startDate, endDate]);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRange, currentStaffId]);
 
   useEffect(() => {
     if (!selectedOrderId) {
@@ -131,36 +177,67 @@ export default function PosHomePage() {
 
   const num = (v: unknown) => (typeof v === 'number' ? v : Number(v) || 0);
 
-  const typeData = stats ? [
-    { name: 'Cả ngày', value: num(stats.fullDayOrders), color: PIE_SERVICE_COLORS.fullDay },
-    { name: '4H', value: num(stats.package4hOrders), color: PIE_SERVICE_COLORS.fourHours },
-    { name: 'Mang đi', value: num(stats.takeawayOrders), color: PIE_SERVICE_COLORS.takeaway },
-  ] : [];
+  // Tính stats từ danh sách đơn đã lọc (chỉ đơn của nhân viên này)
+  const totalRevenue = orders.reduce((sum: number, o: any) => sum + num(o.totalAmount), 0);
+  const totalOrders = orders.length;
+
+  const countBySessionType = (keys: string[]) =>
+    orders.filter((o: any) => keys.includes(String(o.sessionType || '').toUpperCase())).length;
+
+  const fullDayCount = countBySessionType(['FULL_DAY', 'FULLTIME']);
+  const fourHCount = countBySessionType(['FOUR_HOURS', 'PACKAGE_4H']);
+  const takeawayCount = countBySessionType(['TAKEAWAY']);
+
+  const typeData = [
+    { name: 'Cả ngày', value: fullDayCount, color: PIE_SERVICE_COLORS.fullDay },
+    { name: '4H', value: fourHCount, color: PIE_SERVICE_COLORS.fourHours },
+    { name: 'Mang đi', value: takeawayCount, color: PIE_SERVICE_COLORS.takeaway },
+  ];
+
+  // Tính payment breakdown từ danh sách đơn
+  const cashOrders = orders.filter((o: any) => (o.paymentMethod || '').toUpperCase() === 'CASH');
+  const transferOrders = orders.filter((o: any) => (o.paymentMethod || '').toUpperCase() === 'BANK_TRANSFER');
+  const cashAmount = cashOrders.reduce((s: number, o: any) => s + num(o.totalAmount), 0);
+  const transferAmount = transferOrders.reduce((s: number, o: any) => s + num(o.totalAmount), 0);
+
+  const syntheticStats = {
+    totalRevenue,
+    totalOrders,
+    cashOrders: cashOrders.length,
+    bankTransferOrders: transferOrders.length,
+    cashAmount,
+    bankTransferAmount: transferAmount,
+    fullDayOrders: fullDayCount,
+    package4hOrders: fourHCount,
+    takeawayOrders: takeawayCount,
+  };
 
   const paymentData =
-    stats || orders.length > 0
+    orders.length > 0
       ? withPaymentPieColors(
-          buildPaymentPieSlices(stats, orders, { cashLabel: 'Tiền Mặt', transferLabel: 'Chuyển Khoản' })
+          buildPaymentPieSlices(syntheticStats, orders, { cashLabel: 'Tiền Mặt', transferLabel: 'Chuyển Khoản' })
         )
       : [];
 
-  const totalRevenue = num(stats?.totalRevenue);
-  const totalOrders = num(stats?.totalOrders);
   const hasTypeChart = typeData.some((d) => d.value > 0);
   const hasPaymentChart = paymentData.length > 0;
 
-  const formatOrderTime = (isoStr: string) => {
-    if (!isoStr) return { date: '--', time: '--', full: '--' };
-    const d = new Date(isoStr);
-    const date = d.toLocaleDateString('vi-VN');
-    const time = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-    return { date, time, full: `${date} - ${time}` };
-  };
+  const formatOrderTime = (isoStr: string) => splitDateTimeVN(isoStr);
 
   return (
     <div className="pos-home-container">
       <div className="pos-home-header-fixed">
-        <h2 className="pos-home-title">Trang Chủ</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h2 className="pos-home-title">Trang Chủ</h2>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: '4px',
+            background: '#eef7e5', color: '#2d7a09', border: '1px solid #b5dca1',
+            borderRadius: '12px', padding: '2px 8px', fontSize: '11px', fontWeight: 600,
+          }}>
+            <User size={11} />
+            {currentStaffName}
+          </span>
+        </div>
         <div className="home-filter-container">
           <div className="time-filter-wrapper">
             <Calendar size={18} color="#3b9016" />
@@ -181,11 +258,35 @@ export default function PosHomePage() {
             <div className="pos-custom-date-range">
               <div className="pos-date-input-wrapper">
                 <span className="pos-date-label">Từ</span>
-                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} max={endDate || todayStr} className="pos-date-input" onClick={(e) => e.currentTarget.showPicker && e.currentTarget.showPicker()} onKeyDown={(e) => e.preventDefault()} />
+                <input
+                  type="date"
+                  value={startDate}
+                  min="2000-01-01"
+                  max={endDate > todayStr ? todayStr : endDate || todayStr}
+                  onChange={(e) => {
+                    const next = applyFromDateChange(e.target.value, endDate, todayStr);
+                    setStartDate(next.from);
+                    setEndDate(next.to);
+                  }}
+                  className="pos-date-input"
+                  onClick={(e) => e.currentTarget.showPicker && e.currentTarget.showPicker()}
+                />
               </div>
               <div className="pos-date-input-wrapper">
                 <span className="pos-date-label">Đến</span>
-                <input type="date" value={endDate} onChange={e => { setEndDate(e.target.value); if (startDate && e.target.value < startDate) setStartDate(e.target.value); }} max={todayStr} className="pos-date-input" onClick={(e) => e.currentTarget.showPicker && e.currentTarget.showPicker()} onKeyDown={(e) => e.preventDefault()} />
+                <input
+                  type="date"
+                  value={endDate}
+                  min={startDate || undefined}
+                  max={todayStr}
+                  onChange={(e) => {
+                    const next = applyToDateChange(e.target.value, startDate, todayStr);
+                    setStartDate(next.from);
+                    setEndDate(next.to);
+                  }}
+                  className="pos-date-input"
+                  onClick={(e) => e.currentTarget.showPicker && e.currentTarget.showPicker()}
+                />
               </div>
             </div>
           )}
@@ -201,7 +302,7 @@ export default function PosHomePage() {
               <div className="summary-icon-circle"><DollarSign size={10} strokeWidth={3} /></div>
               <div className="summary-title">Tổng Doanh Thu</div>
             </div>
-            <div className="summary-value">{isLoading ? '--' : fmt(totalRevenue)}</div>
+            <div className="summary-value">{isLoading ? '--' : totalRevenue.toLocaleString('vi-VN') + 'đ'}</div>
             <div className="summary-badge-row"><span className="summary-compare-text">Kỳ đã chọn</span></div>
           </div>
           <div className="summary-card orders">

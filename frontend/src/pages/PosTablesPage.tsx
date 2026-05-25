@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { cardAPI, productAPI } from '../services/api';
+import { cardAPI, productAPI, orderAPI } from '../services/api';
 import { Plus, AlertTriangle, RefreshCw, Search, X } from 'lucide-react';
 import './PosTablesPage.css';
 import { mapPosProduct, posUnitPrice, type PosProduct } from '../utils/posProduct';
 import { isItemPackage4h, rowBackground } from '../utils/orderItemDisplay';
+import { formatTimeVN, parseApiDateTime } from '../utils/dateTime';
+import {
+  getTableCardDisplay,
+  resolveSessionDurationType,
+} from '../utils/tableSessionDisplay';
 
 interface Card {
   id: number;
@@ -19,6 +24,7 @@ interface CardSession {
   endTime: string;
   actualEndTime: string | null;
   orderId: string;
+  orderDbId?: string | null; // Numeric DB id dùng để fetch chi tiết từ API
   status: string; // "Đang sử dụng", "Hoàn thành", "Quá giờ"
   serviceType: string;
 }
@@ -26,12 +32,6 @@ interface CardSession {
 type Product = PosProduct;
 
 
-
-// Helper function to robustly parse UTC server time to browser local time
-const parseServerDate = (dateStr: string | null | undefined): Date => {
-  if (!dateStr) return new Date();
-  return new Date(dateStr);
-};
 
 const lineUnitPrice = (
   item: { sku?: string; serveType: 'takeaway' | 'dine_in'; duration: '4h' | 'all_day'; price?: number },
@@ -106,6 +106,9 @@ export default function PosTablesPage() {
   }>>({});
 
   const [selectedSessionForDetail, setSelectedSessionForDetail] = useState<CardSession | null>(null);
+  // API-fetched items for detail modal (shared across all staff)
+  const [apiDetailItems, setApiDetailItems] = useState<any[]>([]);
+  const [isLoadingApiDetail, setIsLoadingApiDetail] = useState(false);
 
   // Trả thẻ popup states
   const [releaseConfirmCard, setReleaseConfirmCard] = useState<string | null>(null);
@@ -244,6 +247,7 @@ export default function PosTablesPage() {
         endTime: s.expectedEndAt ?? s.endTime,
         actualEndTime: s.actualEndAt ?? s.actualEndTime ?? null,
         orderId: s.order?.orderCode ?? s.orderId ?? '',
+        orderDbId: s.order?.id ? String(s.order.id) : null, // numeric DB id
         status: mapSessionStatus(s.status),
         serviceType: s.serviceType,
       }));
@@ -254,7 +258,7 @@ export default function PosTablesPage() {
       setCards(sortedCards);
 
       const sortedSessions = [...normalizedSessions].sort((a, b) =>
-        parseServerDate(b.startTime).getTime() - parseServerDate(a.startTime).getTime()
+        parseApiDateTime(b.startTime).getTime() - parseApiDateTime(a.startTime).getTime()
       );
       setSessions(sortedSessions);
     } catch (err) {
@@ -279,6 +283,36 @@ export default function PosTablesPage() {
     }, 10000);
     return () => clearInterval(pollInterval);
   }, []);
+
+  // Fetch order items from backend API when detail modal opens
+  // This ensures ALL staff can see the item list regardless of who created the order
+  useEffect(() => {
+    if (!selectedSessionForDetail) {
+      setApiDetailItems([]);
+      return;
+    }
+    const dbId = selectedSessionForDetail.orderDbId;
+    if (!dbId) {
+      setApiDetailItems([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setIsLoadingApiDetail(true);
+      try {
+        const res = await orderAPI.getOrderById(dbId, { includeTransferProof: false });
+        if (cancelled) return;
+        const items = Array.isArray(res.data?.items) ? res.data.items : [];
+        setApiDetailItems(items);
+      } catch (err) {
+        console.error('Không thể tải chi tiết đơn hàng từ server:', err);
+        if (!cancelled) setApiDetailItems([]);
+      } finally {
+        if (!cancelled) setIsLoadingApiDetail(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedSessionForDetail]);
 
   const handleRelease = (cardNumber: string) => {
     setReleaseConfirmCard(cardNumber);
@@ -356,11 +390,8 @@ export default function PosTablesPage() {
       return false;
     }
 
-    const durationType = activeSession.serviceType === 'PACKAGE_4H' ? '4h' : 'all_day';
-
-    const remainingTimeMs = parseServerDate(activeSession.endTime).getTime() - currentTime.getTime();
-    const isOverdue = remainingTimeMs < 0;
-    const isNearOverdue = !isOverdue && remainingTimeMs <= 15 * 60 * 1000;
+    const durationType = resolveSessionDurationType(activeSession);
+    const display = getTableCardDisplay(activeSession, currentTime);
 
     if (selectedFilter === '4h') {
       return durationType === '4h';
@@ -369,7 +400,7 @@ export default function PosTablesPage() {
       return durationType === 'all_day';
     }
     if (selectedFilter === 'near_overdue') {
-      return isOverdue || isNearOverdue;
+      return display.isOverdue || display.isNearOverdue;
     }
 
     return true;
@@ -384,13 +415,10 @@ export default function PosTablesPage() {
     );
 
     if (activeSession) {
-      const remainingTimeMs = parseServerDate(activeSession.endTime).getTime() - currentTime.getTime();
-      const isOverdue = remainingTimeMs < 0;
-      const isNearOverdue = !isOverdue && remainingTimeMs <= 15 * 60 * 1000;
-
-      if (isOverdue) return 1; // Quá giờ (Red)
-      if (isNearOverdue) return 2; // Sắp hết giờ (Yellow)
-      return 3; // Đang sử dụng (Green)
+      const display = getTableCardDisplay(activeSession, currentTime);
+      if (display.isOverdue) return 1;
+      if (display.isNearOverdue) return 2;
+      return 3;
     }
 
     if (card.status === 'khóa') return 5; // Khóa (Grey)
@@ -404,7 +432,7 @@ export default function PosTablesPage() {
            !s.actualEndTime
     );
     if (activeSession) {
-      return parseServerDate(activeSession.endTime).getTime() - currentTime.getTime();
+      return getTableCardDisplay(activeSession, currentTime).remainingTimeMs;
     }
     return Infinity;
   };
@@ -507,47 +535,13 @@ export default function PosTablesPage() {
               let durationType: '4h' | 'all_day' | null = null;
 
               if (activeSession) {
-                durationType = activeSession.serviceType === 'PACKAGE_4H' ? '4h' : 'all_day';
+                const display = getTableCardDisplay(activeSession, currentTime);
+                durationType = display.durationType;
+                statusColor = display.statusColor;
+                badgeText = display.badgeText;
+                timerStr = display.timerStr;
 
-                const remainingTimeMs = parseServerDate(activeSession.endTime).getTime() - currentTime.getTime();
-                const isOverdue = remainingTimeMs < 0;
-                const isNearOverdue = !isOverdue && remainingTimeMs <= 15 * 60 * 1000;
-
-                if (isOverdue) {
-                  statusColor = 'overdue';
-                  badgeText = 'Quá giờ';
-                  
-                  const elapsedMs = Math.abs(remainingTimeMs);
-                  const hours = Math.floor(elapsedMs / (3600 * 1000));
-                  const mins = Math.floor((elapsedMs % (3600 * 1000)) / (60 * 1000));
-                  const secs = Math.floor((elapsedMs % (60 * 1000)) / 1000);
-                  const pad = (n: number) => n.toString().padStart(2, '0');
-                  timerStr = `-${pad(hours)} : ${pad(mins)} : ${pad(secs)}`;
-                } else if (isNearOverdue) {
-                  statusColor = 'near-overdue';
-                  badgeText = 'Sắp hết giờ';
-
-                  const hours = Math.floor(remainingTimeMs / (3600 * 1000));
-                  const mins = Math.floor((remainingTimeMs % (3600 * 1000)) / (60 * 1000));
-                  const secs = Math.floor((remainingTimeMs % (60 * 1000)) / 1000);
-                  const pad = (n: number) => n.toString().padStart(2, '0');
-                  timerStr = `${pad(hours)} : ${pad(mins)} : ${pad(secs)}`;
-                } else {
-                  statusColor = 'in-use';
-                  badgeText = durationType === '4h' ? '4H' : 'Cả ngày';
-
-                  if (durationType === '4h') {
-                    const hours = Math.floor(remainingTimeMs / (3600 * 1000));
-                    const mins = Math.floor((remainingTimeMs % (3600 * 1000)) / (60 * 1000));
-                    const secs = Math.floor((remainingTimeMs % (60 * 1000)) / 1000);
-                    const pad = (n: number) => n.toString().padStart(2, '0');
-                    timerStr = `${pad(hours)} : ${pad(mins)} : ${pad(secs)}`;
-                  } else {
-                    timerStr = 'CẢ NGÀY';
-                  }
-                }
-
-                const startTimeStr = parseServerDate(activeSession.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                const startTimeStr = formatTimeVN(activeSession.startTime);
                 
                 // Get item count from metadata or decoded orderId
                 let itemCount = ordersMetadata[activeSession.orderId]?.itemCount;
@@ -679,40 +673,32 @@ export default function PosTablesPage() {
                 <div className="tables-info-item">
                   <span className="tables-info-label">Ngày:</span>
                   <span className="tables-info-value">
-                    {parseServerDate(selectedSessionForDetail.startTime).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    {parseApiDateTime(selectedSessionForDetail.startTime).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric' })}
                   </span>
                 </div>
                 <div className="tables-info-item">
                   <span className="tables-info-label">Giờ vào:</span>
                   <span className="tables-info-value">
-                    {parseServerDate(selectedSessionForDetail.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                    {parseApiDateTime(selectedSessionForDetail.startTime).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
                 {(() => {
-                  const is4h = selectedSessionForDetail.serviceType === 'PACKAGE_4H';
+                  const is4h = resolveSessionDurationType(selectedSessionForDetail) === '4h';
                   if (!is4h) return null;
-                  
+                  const display = getTableCardDisplay(selectedSessionForDetail, currentTime);
+
                   return (
                     <>
                       <div className="tables-info-item">
                         <span className="tables-info-label">Dự kiến ra:</span>
                         <span className="tables-info-value">
-                          {parseServerDate(selectedSessionForDetail.endTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                          {parseApiDateTime(selectedSessionForDetail.endTime).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
                       <div className="tables-info-item">
                         <span className="tables-info-label">Thời gian còn lại:</span>
                         <span className="tables-info-value" style={{ color: '#C42326', fontWeight: 800, fontSize: '16px' }}>
-                          {(() => {
-                            const remainingTimeMs = parseServerDate(selectedSessionForDetail.endTime).getTime() - currentTime.getTime();
-                            const isOverdue = remainingTimeMs < 0;
-                            const elapsedMs = Math.abs(remainingTimeMs);
-                            const hours = Math.floor(elapsedMs / (3600 * 1000));
-                            const mins = Math.floor((elapsedMs % (3600 * 1000)) / (60 * 1000));
-                            const secs = Math.floor((elapsedMs % (60 * 1000)) / 1000);
-                            const pad = (n: number) => n.toString().padStart(2, '0');
-                            return `${isOverdue ? '-' : ''}${pad(hours)}:${pad(mins)}:${pad(secs)}`;
-                          })()}
+                          {display.timerStr.replace(/ : /g, ':')}
                         </span>
                       </div>
                     </>
@@ -735,15 +721,53 @@ export default function PosTablesPage() {
                     </thead>
                     <tbody>
                       {(() => {
-                        // Decode directly from orderId first
+                        // Priority 1: Items fetched from backend API (shared across all staff)
+                        if (isLoadingApiDetail) {
+                          return (
+                            <tr>
+                              <td colSpan={5} className="tables-no-products" style={{ backgroundColor: 'transparent', color: '#888' }}>
+                                Đang tải danh sách món...
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        // Map API items (from backend) to display format
+                        if (apiDetailItems.length > 0) {
+                          return apiDetailItems.map((item: any, index: number) => {
+                            const unitPrice = Number(item.unitPrice ?? item.price ?? 0);
+                            const qty = Number(item.quantity ?? 1);
+                            const svcType = item.serviceType || '';
+                            let serveText = 'Tại chỗ';
+                            if (svcType === 'TAKEAWAY') serveText = 'Mang đi';
+                            else if (svcType === 'FOUR_HOURS' || svcType === 'PACKAGE_4H') serveText = 'Tại chỗ 4 giờ';
+                            else if (svcType === 'FULL_DAY' || svcType === 'FULLTIME') serveText = 'Tại chỗ cả ngày';
+                            const isPackage4h = svcType === 'FOUR_HOURS' || svcType === 'PACKAGE_4H';
+                            const bg = rowBackground(isPackage4h);
+                            const cellStyle = { backgroundColor: bg };
+                            return (
+                              <tr key={item.id ?? index} className={isPackage4h ? 'row-package-4h' : undefined}>
+                                <td style={cellStyle}>
+                                  <div style={{ fontWeight: 600, fontSize: '14px', color: '#111' }}>{item.productName || item.name}</div>
+                                  <div style={{ fontSize: '12px', color: '#333', marginTop: '4px' }}>{serveText}</div>
+                                </td>
+                                <td style={{ ...cellStyle, textAlign: 'right', fontSize: '13px' }}>{unitPrice.toLocaleString('vi-VN')}đ</td>
+                                <td style={{ ...cellStyle, textAlign: 'center', fontSize: '13px' }}>{String(qty).padStart(2, '0')}</td>
+                                <td style={{ ...cellStyle, textAlign: 'right', fontSize: '13px', fontWeight: 'bold' }}>
+                                  {(unitPrice * qty).toLocaleString('vi-VN')}đ
+                                </td>
+                              </tr>
+                            );
+                          });
+                        }
+
+                        // Priority 2: Fallback — decode from orderId or read localStorage cache
                         let items: any[] = decodeOrderIdToItems(selectedSessionForDetail.orderId, productList);
-                        
-                        // Fallback to local storage if orderId decoding was empty
                         if (items.length === 0) {
                           const metadata = ordersMetadata[selectedSessionForDetail.orderId];
                           items = metadata?.items || [];
                         }
-                        
+
                         if (items.length === 0) {
                           return (
                             <tr>
@@ -785,6 +809,16 @@ export default function PosTablesPage() {
                 <span>Tổng cộng đơn:</span>
                 <span className="tables-total-price">
                   {(() => {
+                    // Use API items first for accurate total
+                    if (apiDetailItems.length > 0) {
+                      const total = apiDetailItems.reduce((sum: number, item: any) => {
+                        const unitPrice = Number(item.unitPrice ?? item.price ?? 0);
+                        const qty = Number(item.quantity ?? 1);
+                        return sum + unitPrice * qty;
+                      }, 0);
+                      return total > 0 ? `${total.toLocaleString('vi-VN')}đ` : 'Chưa tính';
+                    }
+                    // Fallback to localStorage/decoded
                     let items: any[] = decodeOrderIdToItems(selectedSessionForDetail.orderId, productList);
                     if (items.length === 0) {
                       const metadata = ordersMetadata[selectedSessionForDetail.orderId];
@@ -800,9 +834,7 @@ export default function PosTablesPage() {
               </div>
               <div className="tables-sheet-actions" style={{ display: 'flex', gap: '10px' }}>
                 {(() => {
-                  const diffMs = parseServerDate(selectedSessionForDetail.endTime).getTime() - parseServerDate(selectedSessionForDetail.startTime).getTime();
-                  const is4h = [4, 8, 12, 16, 20, 24].some(h => Math.abs(diffMs - h * 60 * 60 * 1000) < 60000);
-                  if (is4h) {
+                  if (resolveSessionDurationType(selectedSessionForDetail) === '4h') {
                     return (
                       <button 
                         className="tables-btn-checkout"

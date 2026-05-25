@@ -192,6 +192,13 @@ public class OrderController {
         }
 
         order.setTotalAmount(new BigDecimal(paymentAmountStr));
+
+        String cashReceivedStr = payload.get("cashReceived") != null ? payload.get("cashReceived").toString() : null;
+        if (cashReceivedStr != null) {
+            order.setCashReceived(new BigDecimal(cashReceivedStr));
+        } else {
+            order.setCashReceived(new BigDecimal(paymentAmountStr));
+        }
         orderRepository.save(order);
 
         Payment payment = new Payment();
@@ -241,6 +248,12 @@ public class OrderController {
                 BigDecimal addon = new BigDecimal(paymentAmountStr);
                 BigDecimal currentTotal = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
                 order.setTotalAmount(currentTotal.add(addon));
+
+                String cashReceivedStr = payload.get("cashReceived") != null ? payload.get("cashReceived").toString() : null;
+                BigDecimal additionalCash = cashReceivedStr != null ? new BigDecimal(cashReceivedStr) : addon;
+                BigDecimal currentCash = order.getCashReceived() != null ? order.getCashReceived() : BigDecimal.ZERO;
+                order.setCashReceived(currentCash.add(additionalCash));
+
                 orderRepository.save(order);
 
                 String pmStr = payload.get("paymentMethod") != null ? payload.get("paymentMethod").toString() : "cash";

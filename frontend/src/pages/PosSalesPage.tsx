@@ -325,6 +325,8 @@ export default function PosSalesPage() {
 
     const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
+    const actualCashReceived = paymentMethod === 'cash' ? (parseInt(cashInput) || finalTotal) : finalTotal;
+
     try {
       await cardAPI.startSession({
         cardNumber: selectedCardNumber,
@@ -332,6 +334,7 @@ export default function PosSalesPage() {
         duration: duration,
         paymentMethod: paymentMethod === 'cash' ? 'cash' : 'transfer',
         paymentAmount: finalTotal,
+        cashReceived: actualCashReceived,
         paymentImage: paymentMethod === 'transfer' ? paymentImage : null,
         items: mapCartItemsForApi(cartItems),
       });
@@ -463,14 +466,21 @@ export default function PosSalesPage() {
           if (extendTime) {
             const pad = (n: number) => n.toString().padStart(2, '0');
             const formattedDate = `${newEndTime.getFullYear()}-${pad(newEndTime.getMonth() + 1)}-${pad(newEndTime.getDate())}T${pad(newEndTime.getHours())}:${pad(newEndTime.getMinutes())}:${pad(newEndTime.getSeconds())}`;
-            await cardAPI.extendSession(lockedCardNumber, formattedDate, upgradeToAllDay ? 'all_day' : undefined);
+            const extendServiceType = upgradeToAllDay
+              ? 'all_day'
+              : new4hCount > 0
+                ? '4h'
+                : undefined;
+            await cardAPI.extendSession(lockedCardNumber, formattedDate, extendServiceType);
           }
 
           if (cartItems.length > 0 && orderId) {
+            const actualCashReceived = paymentMethod === 'cash' ? (parseInt(cashInput) || finalTotal) : finalTotal;
             await orderAPI.appendItems({
               orderCode: orderId,
               paymentMethod: paymentMethod === 'cash' ? 'cash' : 'transfer',
               paymentAmount: finalTotal,
+              cashReceived: actualCashReceived,
               paymentImage: paymentMethod === 'transfer' ? paymentImage : null,
               items: mapCartItemsForApi(cartItems),
             });
@@ -550,10 +560,12 @@ export default function PosSalesPage() {
       }
       
       try {
+        const actualCashReceived = paymentMethod === 'cash' ? (parseInt(cashInput) || finalTotal) : finalTotal;
         await orderAPI.createTakeaway({
           orderId: taOrderId,
           paymentMethod: paymentMethod === 'cash' ? 'cash' : 'transfer',
           paymentAmount: finalTotal,
+          cashReceived: actualCashReceived,
           paymentImage: paymentMethod === 'transfer' ? paymentImage : null,
           items: mapCartItemsForApi(cartItems),
         });

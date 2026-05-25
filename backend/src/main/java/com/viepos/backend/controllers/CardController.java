@@ -143,8 +143,15 @@ public class CardController {
         String paymentAmountStr = payload.get("paymentAmount") != null ? payload.get("paymentAmount").toString() : null;
         if (paymentAmountStr != null) {
             order.setTotalAmount(new BigDecimal(paymentAmountStr));
-            orderRepository.save(order);
         }
+
+        String cashReceivedStr = payload.get("cashReceived") != null ? payload.get("cashReceived").toString() : null;
+        if (cashReceivedStr != null) {
+            order.setCashReceived(new BigDecimal(cashReceivedStr));
+        } else if (paymentAmountStr != null) {
+            order.setCashReceived(new BigDecimal(paymentAmountStr));
+        }
+        orderRepository.save(order);
 
         savePaymentIfPresent(order, payload);
 
@@ -226,6 +233,9 @@ public class CardController {
             String serviceTypeStr = payload.get("serviceType");
             if ("all_day".equalsIgnoreCase(serviceTypeStr)) {
                 session.setServiceType(ServiceType.FULLTIME);
+            } else if ("4h".equalsIgnoreCase(serviceTypeStr)
+                    || "package_4h".equalsIgnoreCase(serviceTypeStr)) {
+                session.setServiceType(ServiceType.PACKAGE_4H);
             }
 
             sessionRepository.save(session);

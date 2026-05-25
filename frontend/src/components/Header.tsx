@@ -4,8 +4,11 @@ import { Search, HelpCircle, Heart, Bell, ChevronDown, LogOut,
          Home, BarChart2, ShoppingCart, Package, Users, Coffee, Tag, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { clearAuth } from '../utils/auth';
+import { usePendingApprovals } from '../hooks/usePendingApprovals';
+import NotifyDot from './NotifyDot';
 import logoUrl from '../../assets/favicon/logoname.png';
 import './Header.css';
+import './NotifyDot.css';
 
 export default function Header() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -13,6 +16,7 @@ export default function Header() {
   const profileRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { counts: pendingCounts } = usePendingApprovals();
 
   const staffName = localStorage.getItem('staffName') || 'Người dùng';
   const staffEmail = localStorage.getItem('staffEmail') || '';
@@ -135,7 +139,24 @@ export default function Header() {
       <div className="header-right">
         <button className="header-icon-btn"><HelpCircle size={20} /></button>
         <button className="header-icon-btn"><Heart size={20} /></button>
-        <button className="header-icon-btn"><Bell size={20} /></button>
+        <button
+          type="button"
+          className="header-icon-btn has-notify"
+          onClick={() => navigate('/dashboard/staff/pending')}
+          title={
+            pendingCounts.total > 0
+              ? `${pendingCounts.total} yêu cầu phê duyệt đang chờ`
+              : 'Thông báo'
+          }
+          aria-label={
+            pendingCounts.total > 0
+              ? `${pendingCounts.total} yêu cầu phê duyệt đang chờ`
+              : 'Thông báo'
+          }
+        >
+          <Bell size={20} />
+          <NotifyDot show={pendingCounts.total > 0} />
+        </button>
         
         <div className="header-divider"></div>
         

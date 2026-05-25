@@ -91,6 +91,7 @@ export const cardAPI = {
     duration: string;
     paymentMethod?: string;
     paymentAmount?: number;
+    cashReceived?: number;
     paymentImage?: string | null;
     items?: Array<{
       id: string;
@@ -135,12 +136,13 @@ export const orderAPI = {
     api.get('/api/orders/stats', { params }),
   updateStatus: (id: string, status: string, note?: string) =>
     api.put(`/api/orders/${id}/status`, { status, note }),
-  createTakeaway: (data: { orderId: string; paymentMethod: string; paymentAmount: number; paymentImage: string | null; items?: any[] }) =>
+  createTakeaway: (data: { orderId: string; paymentMethod: string; paymentAmount: number; cashReceived?: number; paymentImage: string | null; items?: any[] }) =>
     api.post('/api/orders/takeaway', data),
   appendItems: (data: {
     orderCode: string;
     paymentMethod?: string;
     paymentAmount?: number;
+    cashReceived?: number;
     paymentImage?: string | null;
     items: Array<{
       id: string;

@@ -20,6 +20,9 @@ export function canAccessManagement(role?: string | null): boolean {
   return isAdminRole(role ?? getAuthRole());
 }
 
+/** Trang mặc định sau khi Quản lý đăng nhập */
+export const MANAGEMENT_HOME = '/dashboard/reports/revenue';
+
 /** POS chỉ dành cho nhân viên đăng nhập bằng PIN */
 export function canAccessPos(role?: string | null): boolean {
   const r = role ?? getAuthRole();

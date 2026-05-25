@@ -1,8 +1,15 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Search, FileText, X } from "lucide-react";
 import { showToast } from "../components/Toast";
 import * as XLSX from "xlsx";
 import { orderAPI, staffAPI, unwrapOrdersList } from "../services/api";
+import {
+  applyFromDateChange,
+  applyToDateChange,
+  getTodayYmd,
+  isValidDateRange,
+} from "../utils/dateRangeFilter";
+import { parseApiDateTime, splitDateTimeVN } from "../utils/dateTime";
 import iconExportExcel from "../../assets/icon/exportexcel_white.png";
 import "./OrderManagementPage.css";
 
@@ -167,7 +174,7 @@ function TransferProofViewIcon() {
 }
 
 export default function OrderManagementPage() {
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodayYmd();
   const [orders, setOrders] = useState<Order[]>([]);
   const [staffList, setStaffList] = useState<{ id: string; name: string }[]>(
     []
@@ -193,24 +200,34 @@ export default function OrderManagementPage() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isTransferProofOpen, setIsTransferProofOpen] = useState(false);
 
+  const dateRangeParams = useMemo(
+    () => (isValidDateRange(fromDate, toDate) ? { fromDate, toDate } : null),
+    [fromDate, toDate]
+  );
+
   const fetchOrders = useCallback(
     async (options?: { silent?: boolean }) => {
-      const silent = options?.silent ?? hasOrdersLoadedRef.current;
+      if (!dateRangeParams) return;
+      const silent = options?.silent === true;
       if (!silent) setIsInitialLoading(true);
       setIsRefreshing(true);
       try {
         const params: Record<string, string | number> = {
-          fromDate,
-          toDate,
+          fromDate: dateRangeParams.fromDate,
+          toDate: dateRangeParams.toDate,
           page: 0,
           size: 500,
         };
         if (statusFilter !== "all") params.status = statusFilter;
         if (employeeFilter !== "all") params.employeeId = employeeFilter;
         const res = await orderAPI.getOrders(params);
-        const list = unwrapOrdersList(res.data).map((row) =>
-          mapOrderFromApi(row)
-        );
+        const list = unwrapOrdersList(res.data)
+          .map((row) => mapOrderFromApi(row))
+          .sort(
+            (a, b) =>
+              parseApiDateTime(b.createdAt).getTime() -
+              parseApiDateTime(a.createdAt).getTime()
+          );
         setOrders(list);
         hasOrdersLoadedRef.current = list.length > 0;
         setSelectedOrderId((prevId) => {
@@ -236,12 +253,13 @@ export default function OrderManagementPage() {
         setIsRefreshing(false);
       }
     },
-    [fromDate, toDate, statusFilter, employeeFilter]
+    [dateRangeParams, statusFilter, employeeFilter]
   );
 
   useEffect(() => {
+    if (!dateRangeParams) return;
     fetchOrders();
-  }, [fetchOrders]);
+  }, [dateRangeParams, statusFilter, employeeFilter, fetchOrders]);
 
   useEffect(() => {
     staffAPI
@@ -363,21 +381,7 @@ export default function OrderManagementPage() {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("vi-VN").format(amount) + "đ";
 
-  const formatDateTime = (isoStr: string) => {
-    if (!isoStr) return "--";
-    const d = new Date(isoStr);
-    const date = d.toLocaleDateString("vi-VN", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-    const time = d.toLocaleTimeString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-    return { date, time };
-  };
+  const formatDateTime = (isoStr: string) => splitDateTimeVN(isoStr);
 
   const formatDateDisplay = (dateString: string) => {
     const [y, m, d] = dateString.split("-");
@@ -506,8 +510,13 @@ export default function OrderManagementPage() {
                   type="date"
                   className="orders-date-input"
                   value={fromDate}
-                  max={toDate || today}
-                  onChange={(e) => setFromDate(e.target.value)}
+                  min="2000-01-01"
+                  max={toDate > today ? today : toDate || today}
+                  onChange={(e) => {
+                    const next = applyFromDateChange(e.target.value, toDate, today);
+                    setFromDate(next.from);
+                    setToDate(next.to);
+                  }}
                 />
               </div>
               <div className="orders-date-group">
@@ -516,11 +525,12 @@ export default function OrderManagementPage() {
                   type="date"
                   className="orders-date-input"
                   value={toDate}
+                  min={fromDate || undefined}
                   max={today}
                   onChange={(e) => {
-                    const v = e.target.value;
-                    setToDate(v);
-                    if (fromDate > v) setFromDate(v);
+                    const next = applyToDateChange(e.target.value, fromDate, today);
+                    setFromDate(next.from);
+                    setToDate(next.to);
                   }}
                 />
               </div>
@@ -883,16 +893,18 @@ export default function OrderManagementPage() {
                   {formatCurrency(selectedOrder.totalAmount)}
                 </span>
               </div>
+              <div className="order-summary-row small">
+                <span>Tiền khách trả</span>
+                <span>{formatCurrency(selectedOrder.cashReceived || selectedOrder.totalAmount)}</span>
+              </div>
+              <div className="order-summary-row small">
+                <span>Tiền thừa</span>
+                <span>{formatCurrency((selectedOrder.cashReceived || selectedOrder.totalAmount) - selectedOrder.totalAmount)}</span>
+              </div>
               {selectedOrder.discountAmount > 0 && (
                 <div className="order-summary-row small">
                   <span>Giảm giá</span>
                   <span>-{formatCurrency(selectedOrder.discountAmount)}</span>
-                </div>
-              )}
-              {selectedOrder.paymentAmount != null && (
-                <div className="order-summary-row small">
-                  <span>Tiền khách trả</span>
-                  <span>{formatCurrency(selectedOrder.paymentAmount)}</span>
                 </div>
               )}
             </div>

@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Search, X } from 'lucide-react';
 import { inventoryAPI } from '../services/api';
+import {
+  applyFromDateChange,
+  applyToDateChange,
+  getTodayYmd,
+  isValidDateRange,
+} from '../utils/dateRangeFilter';
 import './InventoryHistoryPage.css';
 import './InventoryManagementPage.css';
 
@@ -19,8 +25,7 @@ const BADGE_CLASS: Record<string, string> = {
 };
 
 export default function InventoryHistoryPage() {
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const todayStr = getTodayYmd();
 
   const [transactions, setTransactions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -33,6 +38,7 @@ export default function InventoryHistoryPage() {
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
 
   const fetchTransactions = useCallback(async () => {
+    if (!isValidDateRange(fromDate, toDate)) return;
     setIsLoading(true);
     try {
       const params: any = { fromDate, toDate };
@@ -99,17 +105,15 @@ export default function InventoryHistoryPage() {
   const totalDecrease = filteredRows.filter(r => r.quantity < 0).reduce((sum, r) => sum + Math.abs(r.quantity), 0);
 
   const handleFromDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    if (!val) { setFromDate(''); return; }
-    setFromDate(val > toDate && toDate ? toDate : val);
+    const next = applyFromDateChange(e.target.value, toDate, todayStr);
+    setFromDate(next.from);
+    setToDate(next.to);
   };
 
   const handleToDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    if (!val) { setToDate(''); return; }
-    const capped = val > todayStr ? todayStr : val;
-    setToDate(capped);
-    if (fromDate && capped < fromDate) setFromDate(capped);
+    const next = applyToDateChange(e.target.value, fromDate, todayStr);
+    setFromDate(next.from);
+    setToDate(next.to);
   };
 
   const getQuantityClass = (qty: number) => qty > 0 ? 'qty-positive' : 'qty-negative';
@@ -173,12 +177,12 @@ export default function InventoryHistoryPage() {
 
           <div className="date-filter-group">
             <span className="date-label">Từ:</span>
-            <input type="date" className="date-input" value={fromDate} max={toDate || todayStr} onChange={handleFromDateChange} />
+            <input type="date" className="date-input" value={fromDate} min="2000-01-01" max={toDate > todayStr ? todayStr : toDate || todayStr} onChange={handleFromDateChange} />
           </div>
 
           <div className="date-filter-group">
             <span className="date-label">Đến:</span>
-            <input type="date" className="date-input" value={toDate} max={todayStr} onChange={handleToDateChange} />
+            <input type="date" className="date-input" value={toDate} min={fromDate || undefined} max={todayStr} onChange={handleToDateChange} />
           </div>
 
           <select className="history-type-select" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>

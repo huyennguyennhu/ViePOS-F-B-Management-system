@@ -403,9 +403,11 @@ export default function ProductListPage() {
           onChange={(e) => setCategoryFilter(e.target.value)}
         >
           <option value="">Tất cả danh mục</option>
-          <option value="Cà phê">Cà phê</option>
-          <option value="Trà">Trà</option>
-          <option value="Đồ ăn">Đồ ăn</option>
+          {categories
+            .filter((c: any) => c.name?.toUpperCase() !== 'KHÁC' || (c.productCount ?? 0) > 0)
+            .map((c: any) => (
+              <option key={c.id} value={c.name}>{c.name}</option>
+            ))}
         </select>
 
         <select 

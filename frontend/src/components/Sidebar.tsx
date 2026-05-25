@@ -10,7 +10,10 @@ import iconStaff     from '../../assets/icon/staff.png';
 import iconTable     from '../../assets/icon/table_white.png';
 import iconVoucher   from '../../assets/icon/voucher_white.png';
 import iconSetting   from '../../assets/icon/setting.png';
+import { usePendingApprovals } from '../hooks/usePendingApprovals';
+import NotifyDot from './NotifyDot';
 import './Sidebar.css';
+import './NotifyDot.css';
 
 export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSidebarOpen?: boolean, toggleSidebar?: () => void }) {
   const navigate = useNavigate();
@@ -24,6 +27,7 @@ export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSid
   const isProductsActive = isActive('/dashboard/products');
   const isInventoryActive = isActive('/dashboard/inventory');
   const isStaffActive = isActive('/dashboard/staff');
+  const { counts: pendingCounts } = usePendingApprovals();
 
   const [reportsExpanded, setReportsExpanded] = useState(isReportsActive);
   const [productsExpanded, setProductsExpanded] = useState(isProductsActive);
@@ -153,8 +157,9 @@ export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSid
         </div>
 
         <div className="nav-group">
-          <div className={`nav-item ${isStaffActive ? 'active' : ''}`} onClick={(e) => toggleMenu(e, setStaffExpanded, staffExpanded)}>
+          <div className={`nav-item has-notify ${isStaffActive ? 'active' : ''}`} onClick={(e) => toggleMenu(e, setStaffExpanded, staffExpanded)}>
             <div className="nav-item-left"><img src={iconStaff} alt="Nhân viên" className="sidebar-nav-icon" /> <span className="nav-label">Nhân viên</span></div>
+            <NotifyDot show={pendingCounts.total > 0} title={`${pendingCounts.total} yêu cầu phê duyệt`} />
             {(staffExpanded && isSidebarOpen) ? <ChevronDown size={16} className="nav-chevron" /> : <ChevronRight size={16} className="nav-chevron" />}
           </div>
           
@@ -165,9 +170,10 @@ export default function Sidebar({ isSidebarOpen = true, toggleSidebar }: { isSid
                 {(isActive('/dashboard/staff/list') || isActive('/dashboard/staff', true)) && <span className="sub-nav-indicator">●</span>}
                 <span>Danh sách nhân viên</span>
               </div>
-              <div className={`sub-nav-item ${isActive('/dashboard/staff/pending') ? 'active' : ''}`} onClick={() => navigateTo('/dashboard/staff/pending', 'staff')}>
+              <div className={`sub-nav-item has-notify ${isActive('/dashboard/staff/pending') ? 'active' : ''}`} onClick={() => navigateTo('/dashboard/staff/pending', 'staff')}>
                 {isActive('/dashboard/staff/pending') && <span className="sub-nav-indicator">●</span>}
                 <span>Yêu cầu phê duyệt</span>
+                <NotifyDot show={pendingCounts.total > 0} title={`${pendingCounts.total} yêu cầu phê duyệt`} />
               </div>
               <div className={`sub-nav-item ${isActive('/dashboard/staff/history') ? 'active' : ''}`} onClick={() => navigateTo('/dashboard/staff/history', 'staff')}>
                 {isActive('/dashboard/staff/history') && <span className="sub-nav-indicator">●</span>}

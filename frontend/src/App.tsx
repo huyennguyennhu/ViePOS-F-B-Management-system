@@ -53,7 +53,7 @@ function App() {
         {/* Quản lý — chỉ ADMIN / ROOT_ADMIN */}
         <Route path="/dashboard" element={<AdminRoute />}>
           <Route element={<DashboardLayout />}>
-          <Route index element={<DashboardPage />} />
+          <Route index element={<Navigate to="reports/revenue" replace />} />
           <Route path="reports/revenue" element={<RevenueReportPage />} />
           <Route path="staff" element={<StaffManagementPage />} />
           <Route path="staff/list" element={<StaffManagementPage />} />

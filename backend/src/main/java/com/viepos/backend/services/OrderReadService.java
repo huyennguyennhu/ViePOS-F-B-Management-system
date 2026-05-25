@@ -10,6 +10,7 @@ import com.viepos.backend.models.enums.PaymentMethod;
 import com.viepos.backend.repositories.OrderItemRepository;
 import com.viepos.backend.repositories.OrderRepository;
 import com.viepos.backend.repositories.PaymentRepository;
+import com.viepos.backend.util.ApiDateTime;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -22,6 +23,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -141,16 +143,9 @@ public class OrderReadService {
                 ? totalRevenue.divide(BigDecimal.valueOf(totalOrders), 0, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
-        long daysBetween = ChronoUnit.DAYS.between(from.toLocalDate(), to.toLocalDate());
-        List<Map<String, Object>> chartData;
-        String chartGranularity;
-        if (daysBetween >= 1) {
-            chartGranularity = "day";
-            chartData = buildDailyChartData(completed, from.toLocalDate(), to.toLocalDate());
-        } else {
-            chartGranularity = "hour";
-            chartData = buildHourlyChartData(completed);
-        }
+        ChartBundle chart = buildChartBundle(completed, from, to);
+        List<Map<String, Object>> chartData = chart.data();
+        String chartGranularity = chart.granularity();
 
         Map<String, BigDecimal> revenueByType = new LinkedHashMap<>();
         Map<String, Long> ordersByType = new LinkedHashMap<>();
@@ -321,9 +316,10 @@ public class OrderReadService {
         dto.put("totalAmount", order.getTotalAmount());
         dto.put("subtotalAmount", order.getSubtotalAmount());
         dto.put("discountAmount", order.getDiscountAmount());
+        dto.put("cashReceived", order.getCashReceived());
         dto.put("note", order.getNote());
-        dto.put("createdAt", order.getCreatedAt());
-        dto.put("completedAt", order.getCompletedAt());
+        dto.put("createdAt", ApiDateTime.toVietnamOffset(order.getCreatedAt()));
+        dto.put("completedAt", ApiDateTime.toVietnamOffset(order.getCompletedAt()));
         dto.put("itemCount", itemCounts.getOrDefault(order.getId(), 0L));
 
         if (order.getCreatedBy() != null) {
@@ -470,6 +466,53 @@ public class OrderReadService {
         }).collect(Collectors.toList());
     }
 
+    private record ChartBundle(String granularity, List<Map<String, Object>> data) {}
+
+    private ChartBundle buildChartBundle(List<Order> completed, LocalDateTime from, LocalDateTime to) {
+        LocalDate fromDate = from.toLocalDate();
+        LocalDate toDate = to.toLocalDate();
+        long daysBetween = ChronoUnit.DAYS.between(fromDate, toDate);
+        if (daysBetween == 0) {
+            return new ChartBundle("hour", buildHourlyChartData(completed));
+        }
+        if (daysBetween > 31) {
+            return new ChartBundle("month", buildMonthlyChartData(completed, fromDate, toDate));
+        }
+        return new ChartBundle("day", buildDailyChartData(completed, fromDate, toDate));
+    }
+
+    private List<Map<String, Object>> buildMonthlyChartData(List<Order> completed, LocalDate from, LocalDate to) {
+        Map<YearMonth, BigDecimal> revenueByMonth = new LinkedHashMap<>();
+        Map<YearMonth, Long> ordersByMonth = new LinkedHashMap<>();
+        YearMonth cursor = YearMonth.from(from);
+        YearMonth end = YearMonth.from(to);
+        while (!cursor.isAfter(end)) {
+            revenueByMonth.put(cursor, BigDecimal.ZERO);
+            ordersByMonth.put(cursor, 0L);
+            cursor = cursor.plusMonths(1);
+        }
+        for (Order o : completed) {
+            if (o.getCreatedAt() == null) continue;
+            YearMonth ym = YearMonth.from(o.getCreatedAt());
+            if (!revenueByMonth.containsKey(ym)) {
+                revenueByMonth.put(ym, BigDecimal.ZERO);
+                ordersByMonth.put(ym, 0L);
+            }
+            BigDecimal amt = o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO;
+            revenueByMonth.merge(ym, amt, BigDecimal::add);
+            ordersByMonth.merge(ym, 1L, Long::sum);
+        }
+        return revenueByMonth.entrySet().stream().map(e -> {
+            Map<String, Object> m = new HashMap<>();
+            int month = e.getKey().getMonthValue();
+            m.put("time", "T" + month);
+            m.put("tooltipLabel", String.format("Tháng %d/%d", month, e.getKey().getYear()));
+            m.put("revenue", e.getValue());
+            m.put("orders", ordersByMonth.get(e.getKey()));
+            return m;
+        }).collect(Collectors.toList());
+    }
+
     private List<Map<String, Object>> buildDailyChartData(List<Order> completed, LocalDate from, LocalDate to) {
         Map<LocalDate, BigDecimal> revenueByDay = new LinkedHashMap<>();
         Map<LocalDate, Long> ordersByDay = new LinkedHashMap<>();
@@ -502,11 +545,9 @@ public class OrderReadService {
     }
 
     private Map<String, Object> emptyStats(LocalDateTime from, LocalDateTime to) {
-        long daysBetween = ChronoUnit.DAYS.between(from.toLocalDate(), to.toLocalDate());
-        String chartGranularity = daysBetween >= 1 ? "day" : "hour";
-        List<Map<String, Object>> chartData = daysBetween >= 1
-                ? buildDailyChartData(List.of(), from.toLocalDate(), to.toLocalDate())
-                : buildHourlyChartData(List.of());
+        ChartBundle chart = buildChartBundle(List.of(), from, to);
+        String chartGranularity = chart.granularity();
+        List<Map<String, Object>> chartData = chart.data();
 
         Map<String, Object> stats = new LinkedHashMap<>();
         stats.put("totalRevenue", BigDecimal.ZERO);

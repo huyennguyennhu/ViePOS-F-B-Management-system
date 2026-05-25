@@ -47,6 +47,9 @@ public class Order {
     @Column(name = "total_amount", nullable = false)
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
+    @Column(name = "cash_received")
+    private BigDecimal cashReceived = BigDecimal.ZERO;
+
     @Column(columnDefinition = "TEXT")
     private String note;
 

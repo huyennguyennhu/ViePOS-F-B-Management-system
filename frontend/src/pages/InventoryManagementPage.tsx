@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Search, X, ChevronDown } from 'lucide-react';
 import './InventoryManagementPage.css';
 import api from '../services/api';
@@ -317,6 +317,14 @@ export default function InventoryManagementPage() {
   const warningCount = inventoryData.filter(item => item.status === 'Cảnh báo').length;
   const outOfStockCount = inventoryData.filter(item => item.status === 'Hết hàng').length;
 
+  const categoryOptions = useMemo(() => {
+    const names = new Set<string>();
+    inventoryData.forEach((item) => {
+      if (item.category) names.add(item.category);
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'vi'));
+  }, [inventoryData]);
+
   // Filter data
   const filteredData = inventoryData.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -408,10 +416,10 @@ export default function InventoryManagementPage() {
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
             >
-              <option>Tất cả danh mục</option>
-              <option>Cà Phê</option>
-              <option>Trà</option>
-              <option>Ăn Vặt</option>
+              <option value="Tất cả danh mục">Tất cả danh mục</option>
+              {categoryOptions.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
             </select>
           </div>
           <div className="inventory-filter-select-wrapper">

@@ -3,6 +3,9 @@ import { useLocation } from "react-router-dom";
 import { Search, Eye, Edit2, Trash2, X, User } from "lucide-react";
 import { staffAPI } from "../services/api";
 import { showToast } from "../components/Toast";
+import { formatDateTimeVN, parseApiDateTime } from "../utils/dateTime";
+import NotifyDot from "../components/NotifyDot";
+import { notifyPendingApprovalsChanged } from "../hooks/usePendingApprovals";
 import "./DashboardPage.css";
 import "./StaffManagementPage.css";
 
@@ -40,7 +43,7 @@ export default function StaffManagementPage() {
 
   // Tab 1 Data
   const [staffList, setStaffList] = useState<Staff[]>([]);
-  const [filterStatus, setFilterStatus] = useState<string>("APPROVED"); // APPROVED or REJECTED or ALL
+  const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [searchTerm, setSearchTerm] = useState("");
 
   // Tab 1 CRUD States
@@ -125,28 +128,29 @@ export default function StaffManagementPage() {
       setPendingStaff(
         accRes.data.sort(
           (a: any, b: any) =>
-            new Date(b.createdAt || 0).getTime() -
-            new Date(a.createdAt || 0).getTime()
+            parseApiDateTime(b.createdAt).getTime() -
+            parseApiDateTime(a.createdAt).getTime()
         )
       );
       setPendingPinReqs(
         pinRes.data.sort(
           (a: any, b: any) =>
-            new Date(b.createdAt || 0).getTime() -
-            new Date(a.createdAt || 0).getTime()
+            parseApiDateTime(b.createdAt).getTime() -
+            parseApiDateTime(a.createdAt).getTime()
         )
       );
       setPendingPinResets(
         resetRes.data.sort(
           (a: any, b: any) =>
-            new Date(b.createdAt || 0).getTime() -
-            new Date(a.createdAt || 0).getTime()
+            parseApiDateTime(b.createdAt).getTime() -
+            parseApiDateTime(a.createdAt).getTime()
         )
       );
     } catch (err) {
       console.error("Lỗi:", err);
     } finally {
       setLoading(false);
+      notifyPendingApprovalsChanged();
     }
   };
 
@@ -637,44 +641,41 @@ export default function StaffManagementPage() {
       >
         <div style={{ display: "flex", gap: "20px" }}>
           <div
-            className={`admin-tab ${
+            className={`admin-tab has-notify ${
               pendingSubTab === "accounts" ? "active" : ""
             }`}
             onClick={() => setPendingSubTab("accounts")}
             style={{ padding: "8px 16px", fontSize: "15px" }}
           >
             Tài khoản mới
-            {pendingStaff.length > 0 && (
-              <span className="badge" style={{ top: "-5px", right: "-15px" }}>
-                {pendingStaff.length}
-              </span>
-            )}
+            <NotifyDot
+              show={pendingStaff.length > 0}
+              title={`${pendingStaff.length} yêu cầu tài khoản mới`}
+            />
           </div>
           <div
-            className={`admin-tab ${pendingSubTab === "pins" ? "active" : ""}`}
+            className={`admin-tab has-notify ${pendingSubTab === "pins" ? "active" : ""}`}
             onClick={() => setPendingSubTab("pins")}
             style={{ padding: "8px 16px", fontSize: "15px" }}
           >
             Đổi mã PIN
-            {pendingPinReqs.length > 0 && (
-              <span className="badge" style={{ top: "-5px", right: "-15px" }}>
-                {pendingPinReqs.length}
-              </span>
-            )}
+            <NotifyDot
+              show={pendingPinReqs.length > 0}
+              title={`${pendingPinReqs.length} yêu cầu đổi PIN`}
+            />
           </div>
           <div
-            className={`admin-tab ${
+            className={`admin-tab has-notify ${
               pendingSubTab === "resets" ? "active" : ""
             }`}
             onClick={() => setPendingSubTab("resets")}
             style={{ padding: "8px 16px", fontSize: "15px" }}
           >
             Quên mật khẩu
-            {pendingPinResets.length > 0 && (
-              <span className="badge" style={{ top: "-5px", right: "-15px" }}>
-                {pendingPinResets.length}
-              </span>
-            )}
+            <NotifyDot
+              show={pendingPinResets.length > 0}
+              title={`${pendingPinResets.length} yêu cầu quên mật khẩu`}
+            />
           </div>
         </div>
 
@@ -830,7 +831,7 @@ export default function StaffManagementPage() {
                   </td>
                   <td className="staff-name">{req.user?.name}</td>
                   <td>{req.user?.email}</td>
-                  <td>{new Date(req.createdAt).toLocaleString("vi-VN")}</td>
+                  <td>{formatDateTimeVN(req.createdAt)}</td>
                   <td>
                     <div style={{ display: "flex", gap: "8px" }}>
                       <button
@@ -908,7 +909,7 @@ export default function StaffManagementPage() {
                   </td>
                   <td className="staff-name">{req.user?.name}</td>
                   <td>{req.user?.email}</td>
-                  <td>{new Date(req.createdAt).toLocaleString("vi-VN")}</td>
+                  <td>{formatDateTimeVN(req.createdAt)}</td>
                   <td>
                     <div style={{ display: "flex", gap: "8px" }}>
                       <button
@@ -1084,7 +1085,7 @@ export default function StaffManagementPage() {
                   >
                     {item.status === "APPROVED" ? "Đã duyệt" : "Đã từ chối"}
                   </td>
-                  <td>{new Date(item.date).toLocaleString("vi-VN")}</td>
+                  <td>{formatDateTimeVN(item.date)}</td>
                 </tr>
               ))}
               {combinedHistory.length === 0 && !loading && (
@@ -1399,9 +1400,7 @@ export default function StaffManagementPage() {
                 <input
                   type="text"
                   className="modal-input"
-                  value={new Date(viewingStaff.createdAt).toLocaleString(
-                    "vi-VN"
-                  )}
+                  value={formatDateTimeVN(viewingStaff.createdAt)}
                   disabled
                 />
               </div>

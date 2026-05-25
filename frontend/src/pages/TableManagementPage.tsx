@@ -5,6 +5,11 @@ import { showToast } from '../components/Toast';
 import './TableManagementPage.css';
 import { mapPosProduct, posUnitPrice, type PosProduct } from '../utils/posProduct';
 import { isItemPackage4h, rowBackground } from '../utils/orderItemDisplay';
+import { formatTimeVN, parseApiDateTime } from '../utils/dateTime';
+import {
+  getTableCardDisplay,
+  resolveSessionDurationType,
+} from '../utils/tableSessionDisplay';
 
 interface Card {
   id: string;
@@ -21,6 +26,7 @@ interface CardSession {
   actualEndTime: string | null;
   orderId: string;
   status: string;
+  serviceType?: string;
 }
 
 type Product = PosProduct;
@@ -32,14 +38,6 @@ const lineUnitPrice = (
   const product = allProducts.find(p => p.sku === item.sku);
   if (product) return posUnitPrice(product, item.serveType, item.duration);
   return Number(item.price ?? 0);
-};
-
-const parseServerDate = (dateStr: string | null | undefined): Date => {
-  if (!dateStr) return new Date();
-  const hasZ = dateStr.endsWith('Z');
-  const hasOffset = /([+-]\d{2}:\d{2})$/.test(dateStr);
-  const formattedStr = (hasZ || hasOffset) ? dateStr : `${dateStr}Z`;
-  return new Date(formattedStr);
 };
 
 const decodeOrderIdToItems = (orderId: string, allProducts: Product[]) => {
@@ -153,10 +151,11 @@ export default function TableManagementPage() {
         actualEndTime: s.actualEndAt || s.actualEndTime || null,
         orderId: s.order?.orderCode || s.orderId || '',
         status: s.status === 'ACTIVE' ? 'Đang sử dụng' : 'Hoàn thành',
+        serviceType: s.serviceType,
       });
       
       const sortedSessions = [...sessionsRes.data].map(mapSession).sort((a, b) => 
-        parseServerDate(b.startTime).getTime() - parseServerDate(a.startTime).getTime()
+        parseApiDateTime(b.startTime).getTime() - parseApiDateTime(a.startTime).getTime()
       );
       setSessions(sortedSessions);
     } catch (err) {
@@ -210,25 +209,20 @@ export default function TableManagementPage() {
       return false;
     }
 
-    const diffMs = parseServerDate(activeSession.endTime).getTime() - parseServerDate(activeSession.startTime).getTime();
-    const is4h = [4, 8, 12, 16, 20, 24].some(h => Math.abs(diffMs - h * 60 * 60 * 1000) < 60000);
-    const durationType = is4h ? '4h' : 'all_day';
-
-    const remainingTimeMs = parseServerDate(activeSession.endTime).getTime() - currentTime.getTime();
-    const isOverdue = remainingTimeMs < 0;
-    const isNearOverdue = !isOverdue && remainingTimeMs <= 15 * 60 * 1000;
+    const durationType = resolveSessionDurationType(activeSession);
+    const display = getTableCardDisplay(activeSession, currentTime);
 
     if (selectedFilter === '4h') {
-      return durationType === '4h' && !isOverdue;
+      return durationType === '4h' && !display.isOverdue;
     }
     if (selectedFilter === 'all_day') {
-      return durationType === 'all_day' && !isOverdue;
+      return durationType === 'all_day';
     }
     if (selectedFilter === 'near_overdue') {
-      return isNearOverdue;
+      return display.isNearOverdue;
     }
     if (selectedFilter === 'overdue') {
-      return isOverdue;
+      return display.isOverdue;
     }
 
     return true;
@@ -242,12 +236,9 @@ export default function TableManagementPage() {
     );
 
     if (activeSession) {
-      const remainingTimeMs = parseServerDate(activeSession.endTime).getTime() - currentTime.getTime();
-      const isOverdue = remainingTimeMs < 0;
-      const isNearOverdue = !isOverdue && remainingTimeMs <= 15 * 60 * 1000;
-
-      if (isOverdue) return 1;
-      if (isNearOverdue) return 2;
+      const display = getTableCardDisplay(activeSession, currentTime);
+      if (display.isOverdue) return 1;
+      if (display.isNearOverdue) return 2;
       return 3;
     }
 
@@ -262,7 +253,7 @@ export default function TableManagementPage() {
            !s.actualEndTime
     );
     if (activeSession) {
-      return parseServerDate(activeSession.endTime).getTime() - currentTime.getTime();
+      return getTableCardDisplay(activeSession, currentTime).remainingTimeMs;
     }
     return Infinity;
   };
@@ -352,46 +343,13 @@ export default function TableManagementPage() {
                 let durationType: '4h' | 'all_day' | null = null;
 
                 if (activeSession) {
-                  const diffMs = parseServerDate(activeSession.endTime).getTime() - parseServerDate(activeSession.startTime).getTime();
-                  const is4h = [4, 8, 12, 16, 20, 24].some(h => Math.abs(diffMs - h * 60 * 60 * 1000) < 60000);
-                  durationType = is4h ? '4h' : 'all_day';
+                  const display = getTableCardDisplay(activeSession, currentTime);
+                  durationType = display.durationType;
+                  statusColor = display.statusColor;
+                  badgeText = display.badgeText;
+                  timerStr = display.timerStr;
 
-                  const remainingTimeMs = parseServerDate(activeSession.endTime).getTime() - currentTime.getTime();
-                  const isOverdue = remainingTimeMs < 0;
-                  const isNearOverdue = !isOverdue && remainingTimeMs <= 15 * 60 * 1000;
-
-                  if (isOverdue) {
-                    statusColor = 'overdue';
-                    badgeText = 'Quá giờ';
-                    const elapsedMs = Math.abs(remainingTimeMs);
-                    const hours = Math.floor(elapsedMs / (3600 * 1000));
-                    const mins = Math.floor((elapsedMs % (3600 * 1000)) / (60 * 1000));
-                    const secs = Math.floor((elapsedMs % (60 * 1000)) / 1000);
-                    const pad = (n: number) => n.toString().padStart(2, '0');
-                    timerStr = `-${pad(hours)} : ${pad(mins)} : ${pad(secs)}`;
-                  } else if (isNearOverdue) {
-                    statusColor = 'near-overdue';
-                    badgeText = 'Sắp hết giờ';
-                    const hours = Math.floor(remainingTimeMs / (3600 * 1000));
-                    const mins = Math.floor((remainingTimeMs % (3600 * 1000)) / (60 * 1000));
-                    const secs = Math.floor((remainingTimeMs % (60 * 1000)) / 1000);
-                    const pad = (n: number) => n.toString().padStart(2, '0');
-                    timerStr = `${pad(hours)} : ${pad(mins)} : ${pad(secs)}`;
-                  } else {
-                    statusColor = 'in-use';
-                    badgeText = durationType === '4h' ? '4H' : 'Cả ngày';
-                    if (durationType === '4h') {
-                      const hours = Math.floor(remainingTimeMs / (3600 * 1000));
-                      const mins = Math.floor((remainingTimeMs % (3600 * 1000)) / (60 * 1000));
-                      const secs = Math.floor((remainingTimeMs % (60 * 1000)) / 1000);
-                      const pad = (n: number) => n.toString().padStart(2, '0');
-                      timerStr = `${pad(hours)} : ${pad(mins)} : ${pad(secs)}`;
-                    } else {
-                      timerStr = 'CẢ NGÀY';
-                    }
-                  }
-
-                  const startTimeStr = parseServerDate(activeSession.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                  const startTimeStr = formatTimeVN(activeSession.startTime);
                   
                   let itemCount = ordersMetadata[activeSession.orderId]?.itemCount;
                   if (itemCount === undefined) {
@@ -490,41 +448,31 @@ export default function TableManagementPage() {
                   <div className="tables-info-item">
                     <span className="tables-info-label">Ngày:</span>
                     <span className="tables-info-value">
-                      {parseServerDate(selectedSessionForDetail.startTime).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      {parseApiDateTime(selectedSessionForDetail.startTime).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric' })}
                     </span>
                   </div>
                   <div className="tables-info-item">
                     <span className="tables-info-label">Giờ vào:</span>
                     <span className="tables-info-value">
-                      {parseServerDate(selectedSessionForDetail.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                      {parseApiDateTime(selectedSessionForDetail.startTime).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                   {(() => {
-                    const diffMs = parseServerDate(selectedSessionForDetail.endTime).getTime() - parseServerDate(selectedSessionForDetail.startTime).getTime();
-                    const is4h = [4, 8, 12, 16, 20, 24].some(h => Math.abs(diffMs - h * 60 * 60 * 1000) < 60000);
-                    if (!is4h) return null;
-                    
+                    if (resolveSessionDurationType(selectedSessionForDetail) !== '4h') return null;
+                    const display = getTableCardDisplay(selectedSessionForDetail, currentTime);
+
                     return (
                       <>
                         <div className="tables-info-item">
                           <span className="tables-info-label">Dự kiến ra:</span>
                           <span className="tables-info-value">
-                            {parseServerDate(selectedSessionForDetail.endTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                            {parseApiDateTime(selectedSessionForDetail.endTime).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
                         <div className="tables-info-item">
                           <span className="tables-info-label">Thời gian còn lại:</span>
                           <span className="tables-info-value" style={{ color: '#C42326', fontWeight: 800, fontSize: '16px' }}>
-                            {(() => {
-                              const remainingTimeMs = parseServerDate(selectedSessionForDetail.endTime).getTime() - currentTime.getTime();
-                              const isOverdue = remainingTimeMs < 0;
-                              const elapsedMs = Math.abs(remainingTimeMs);
-                              const hours = Math.floor(elapsedMs / (3600 * 1000));
-                              const mins = Math.floor((elapsedMs % (3600 * 1000)) / (60 * 1000));
-                              const secs = Math.floor((elapsedMs % (60 * 1000)) / 1000);
-                              const pad = (n: number) => n.toString().padStart(2, '0');
-                              return `${isOverdue ? '-' : ''}${pad(hours)}:${pad(mins)}:${pad(secs)}`;
-                            })()}
+                            {display.timerStr.replace(/ : /g, ':')}
                           </span>
                         </div>
                       </>

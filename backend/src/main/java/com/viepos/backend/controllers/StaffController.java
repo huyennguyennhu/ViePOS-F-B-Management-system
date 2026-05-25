@@ -25,6 +25,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import com.viepos.backend.util.ApiDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -100,7 +101,7 @@ public class StaffController {
         map.put("phone", emp != null ? emp.getPhone() : "");
         map.put("role", emp != null ? roleToUi(emp.getRole()) : "Nhân viên");
         map.put("status", statusOverride != null ? statusOverride : statusToUi(emp != null ? emp.getStatus() : null));
-        map.put("createdAt", user.getCreatedAt() != null ? user.getCreatedAt().toString() : "");
+        map.put("createdAt", ApiDateTime.toVietnamOffset(user.getCreatedAt()));
         return map;
     }
 
@@ -112,7 +113,7 @@ public class StaffController {
         map.put("phone", req.getRequestPhone() != null ? req.getRequestPhone() : "");
         map.put("role", "STAFF");
         map.put("status", status);
-        map.put("createdAt", req.getCreatedAt().toString());
+        map.put("createdAt", ApiDateTime.toVietnamOffset(req.getCreatedAt()));
         
         // Wrap for pin requests where frontend expects req.user.name
         Map<String, Object> userMap = new HashMap<>();
@@ -262,6 +263,7 @@ public class StaffController {
         response.put("role", user.getEmployee().getRole().name());
         response.put("name", user.getEmployee().getFullName());
         response.put("id", user.getId());
+        response.put("employeeId", user.getEmployee().getEmployeeId()); // "EMPxxx" — dùng để filter đơn hàng
         response.put("phone", user.getEmployee().getPhone());
         
         return ResponseEntity.ok(response);
