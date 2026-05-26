@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Calendar, DollarSign, FileText, Package, ChevronDown, X, User } from 'lucide-react';
+import { Calendar, DollarSign, FileText, Package, X, User } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { orderAPI, unwrapOrdersList } from '../services/api';
 import { getCachedOrderItems, mapCachedItemToDetailRow } from '../utils/orderItemsCache';
