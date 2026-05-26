@@ -1,0 +1,27 @@
+name: Supabase Database Backup
+
+on:
+  schedule:
+    # Chạy vào 00:00 UTC mỗi ngày (tương đương 07:00 sáng giờ Việt Nam)
+    - cron: '0 0 * * *'
+  # Cho phép bạn có thể bấm chạy backup thủ công bằng tay trên GitHub bất cứ lúc nào
+  workflow_dispatch: 
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install PostgreSQL Client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Dump Database
+        run: |
+          pg_dump "${{ secrets.DATABASE_URL }}" -Fc > backup_$(date +'%Y_%m_%d').dump
+
+      - name: Upload Backup Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-db-backup
+          path: backup_*.dump
+          retention-days: 90 # GitHub sẽ tự động giữ file này trong 90 ngày
