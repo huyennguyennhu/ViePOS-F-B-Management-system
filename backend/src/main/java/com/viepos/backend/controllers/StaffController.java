@@ -528,7 +528,6 @@ public class StaffController {
         return ResponseEntity.ok(mapUserToOldStruct(user, null));
     }
 
-    /** Soft-delete: deactivate staff account */
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteStaff(@PathVariable String id) {
         Optional<User> userOpt = userRepository.findById(UUID.fromString(id));
@@ -537,9 +536,17 @@ public class StaffController {
         }
         User user = userOpt.get();
         Employee emp = user.getEmployee();
-        emp.setStatus(EmployeeStatus.RESIGNED);
-        employeeRepository.save(emp);
-        return ResponseEntity.ok(Map.of("message", "Đã vô hiệu hoá tài khoản nhân viên " + emp.getFullName()));
+        try {
+            userRepository.delete(user);
+            if (emp != null) {
+                employeeRepository.delete(emp);
+            }
+            return ResponseEntity.ok(Map.of("message", "Đã xóa vĩnh viễn nhân viên " + (emp != null ? emp.getFullName() : "")));
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            return ResponseEntity.status(400).body(Map.of("message", "Không thể xóa nhân viên này vì đã có dữ liệu liên quan (đơn hàng, lịch sử...). Bạn chỉ có thể chuyển sang trạng thái Đã Khóa/Nghỉ."));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("message", "Có lỗi xảy ra khi xóa nhân viên."));
+        }
     }
 
     private static EmployeeRole resolveEmployeeRole(String roleStr) {
