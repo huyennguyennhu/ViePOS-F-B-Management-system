@@ -150,6 +150,9 @@ public class StaffController {
         if (userRepository.existsByEmail(email)) {
             return ResponseEntity.badRequest().body(Map.of("message", "Email này đã được đăng ký!"));
         }
+        if (employeeRepository.existsByPhone(phone)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Số điện thoại này đã được sử dụng!"));
+        }
 
         AccountRequest req = new AccountRequest();
         req.setRequestCode("REQ" + System.currentTimeMillis());
@@ -180,6 +183,9 @@ public class StaffController {
             }
             if (userRepository.existsByEmail(req.getRequestEmail())) {
                 return ResponseEntity.status(400).body(Map.of("message", "Email này đã tồn tại trong hệ thống."));
+            }
+            if (employeeRepository.existsByPhone(req.getRequestPhone())) {
+                return ResponseEntity.status(400).body(Map.of("message", "Số điện thoại này đã tồn tại trong hệ thống."));
             }
             User currentUser = getCurrentUser();
             if (currentUser != null && currentUser.getEmployee() != null) {
@@ -467,6 +473,9 @@ public class StaffController {
         if (userRepository.existsByEmail(email)) {
             return ResponseEntity.badRequest().body(Map.of("message", "Email này đã được đăng ký!"));
         }
+        if (employeeRepository.existsByPhone(phone)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Số điện thoại này đã được sử dụng!"));
+        }
 
         EmployeeRole empRole = resolveEmployeeRole(roleStr);
 
@@ -506,7 +515,13 @@ public class StaffController {
         Employee emp = user.getEmployee();
 
         if (body.containsKey("name")) emp.setFullName(body.get("name"));
-        if (body.containsKey("phone")) emp.setPhone(body.get("phone"));
+        if (body.containsKey("phone")) {
+            String newPhone = body.get("phone").trim();
+            if (!newPhone.equals(emp.getPhone()) && employeeRepository.existsByPhone(newPhone)) {
+                return ResponseEntity.badRequest().body(Map.of("message", "Số điện thoại này đã được sử dụng"));
+            }
+            emp.setPhone(newPhone);
+        }
         if (body.containsKey("email")) {
             String newEmail = body.get("email").trim();
             if (!newEmail.equalsIgnoreCase(user.getEmail()) && userRepository.existsByEmail(newEmail)) {
@@ -528,6 +543,7 @@ public class StaffController {
         return ResponseEntity.ok(mapUserToOldStruct(user, null));
     }
 
+    /** Soft-delete: deactivate staff account */
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteStaff(@PathVariable String id) {
         Optional<User> userOpt = userRepository.findById(UUID.fromString(id));
@@ -536,17 +552,9 @@ public class StaffController {
         }
         User user = userOpt.get();
         Employee emp = user.getEmployee();
-        try {
-            userRepository.delete(user);
-            if (emp != null) {
-                employeeRepository.delete(emp);
-            }
-            return ResponseEntity.ok(Map.of("message", "Đã xóa vĩnh viễn nhân viên " + (emp != null ? emp.getFullName() : "")));
-        } catch (org.springframework.dao.DataIntegrityViolationException e) {
-            return ResponseEntity.status(400).body(Map.of("message", "Không thể xóa nhân viên này vì đã có dữ liệu liên quan (đơn hàng, lịch sử...). Bạn chỉ có thể chuyển sang trạng thái Đã Khóa/Nghỉ."));
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("message", "Có lỗi xảy ra khi xóa nhân viên."));
-        }
+        emp.setStatus(EmployeeStatus.RESIGNED);
+        employeeRepository.save(emp);
+        return ResponseEntity.ok(Map.of("message", "Đã vô hiệu hoá tài khoản nhân viên " + emp.getFullName()));
     }
 
     private static EmployeeRole resolveEmployeeRole(String roleStr) {
