@@ -24,4 +24,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
             ORDER BY e.fullName ASC
             """)
     List<User> findAllWithEmployeeByRole(@Param("role") EmployeeRole role);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM User u WHERE u.employee.id IN :employeeIds")
+    void deleteByEmployeeIdIn(@Param("employeeIds") java.util.Collection<UUID> employeeIds);
 }

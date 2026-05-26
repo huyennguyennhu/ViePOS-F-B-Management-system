@@ -25,4 +25,8 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
     List<InventoryItem> findByInventoryTransaction_IdInWithProduct(
             @Param("transactionIds") Collection<UUID> transactionIds
     );
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM InventoryItem ii WHERE ii.inventoryTransaction.id IN :transactionIds")
+    void deleteByInventoryTransactionIdIn(@Param("transactionIds") Collection<UUID> transactionIds);
 }

@@ -61,4 +61,8 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             PaymentMethod paymentMethod,
             LocalDateTime cutoff
     );
+
+    @Modifying
+    @Query("DELETE FROM Payment p WHERE p.order.id IN :orderIds")
+    void deleteByOrderIdIn(@Param("orderIds") Collection<UUID> orderIds);
 }

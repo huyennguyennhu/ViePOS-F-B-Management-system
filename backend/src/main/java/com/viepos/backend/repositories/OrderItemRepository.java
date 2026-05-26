@@ -3,6 +3,7 @@ package com.viepos.backend.repositories;
 import com.viepos.backend.dto.OrderItemCountRow;
 import com.viepos.backend.models.OrderItem;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -30,4 +31,8 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, UUID> {
             GROUP BY oi.order.id
             """)
     List<OrderItemCountRow> countItemsByOrderIdIn(@Param("orderIds") Collection<UUID> orderIds);
+
+    @Modifying
+    @Query("DELETE FROM OrderItem oi WHERE oi.order.id IN :orderIds")
+    void deleteByOrderIdIn(@Param("orderIds") Collection<UUID> orderIds);
 }

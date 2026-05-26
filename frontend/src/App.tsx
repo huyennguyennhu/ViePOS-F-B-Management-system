@@ -21,6 +21,7 @@ import ProductListPage from './pages/ProductListPage';
 import CategoryListPage from './pages/CategoryListPage';
 import OrderManagementPage from './pages/OrderManagementPage';
 import TableManagementPage from './pages/TableManagementPage';
+import SettingsPage from './pages/SettingsPage';
 import AdminRoute from './components/AdminRoute';
 import PosRoute from './components/PosRoute';
 
@@ -65,6 +66,7 @@ function App() {
           <Route path="inventory/history" element={<InventoryHistoryPage />} />
           <Route path="orders" element={<OrderManagementPage />} />
           <Route path="tables" element={<TableManagementPage />} />
+          <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<DashboardPage />} />
           </Route>
         </Route>
