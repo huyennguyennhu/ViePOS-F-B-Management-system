@@ -1,5 +1,8 @@
 name: Supabase Database Backup
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   schedule:
     # Chạy vào 00:00 UTC mỗi ngày (tương đương 07:00 sáng giờ Việt Nam)
