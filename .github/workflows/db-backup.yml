@@ -21,7 +21,7 @@ jobs:
 
       - name: Dump Database
         run: |
-          pg_dump "${{ secrets.DATABASE_URL }}" -Fc > backup_$(date +'%Y_%m_%d').dump
+          /usr/lib/postgresql/17/bin/pg_dump "${{ secrets.DATABASE_URL }}" -Fc > backup_$(date +'%Y_%m_%d').dump
 
       - name: Upload Backup Artifact
         uses: actions/upload-artifact@v4
