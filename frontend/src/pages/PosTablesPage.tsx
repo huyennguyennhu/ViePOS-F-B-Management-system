@@ -650,7 +650,7 @@ export default function PosTablesPage() {
                 <div 
                   key={uniqueKey} 
                   className={`table-card-box ${statusColor} ${activeSession ? 'clickable' : ''}`}
-                  onClick={(e) => {
+                  onClick={() => {
                     if (isMultiSelectMode) {
                       if (activeSession) toggleCardSelection(card.cardNumber);
                       return;
