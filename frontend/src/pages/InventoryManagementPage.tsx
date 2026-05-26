@@ -3,6 +3,7 @@ import { Search, X, ChevronDown } from 'lucide-react';
 import './InventoryManagementPage.css';
 import api from '../services/api';
 import { showToast } from '../components/Toast';
+import CustomSelect from '../components/CustomSelect';
 
 export interface InventoryProduct {
   id: string;
@@ -411,28 +412,28 @@ export default function InventoryManagementPage() {
             />
           </div>
           <div className="inventory-filter-select-wrapper">
-            <select 
+            <CustomSelect 
               className="inventory-filter-select"
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-            >
-              <option value="Tất cả danh mục">Tất cả danh mục</option>
-              {categoryOptions.map((name) => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
+              onChange={(val) => setCategoryFilter(val)}
+              options={[
+                { value: "Tất cả danh mục", label: "Tất cả danh mục" },
+                ...categoryOptions.map((name) => ({ value: name, label: name }))
+              ]}
+            />
           </div>
           <div className="inventory-filter-select-wrapper">
-            <select 
+            <CustomSelect 
               className="inventory-filter-select"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option>Tất cả trạng thái kho</option>
-              <option>An toàn</option>
-              <option>Cảnh báo</option>
-              <option>Hết hàng</option>
-            </select>
+              onChange={(val) => setStatusFilter(val)}
+              options={[
+                { value: "Tất cả trạng thái kho", label: "Tất cả trạng thái kho" },
+                { value: "An toàn", label: "An toàn" },
+                { value: "Cảnh báo", label: "Cảnh báo" },
+                { value: "Hết hàng", label: "Hết hàng" }
+              ]}
+            />
           </div>
           
           <div className="results-count">

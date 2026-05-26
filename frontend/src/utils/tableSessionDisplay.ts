@@ -1,4 +1,4 @@
-import { parseApiDateTime } from './dateTime';
+import { parseVNWallDateTime } from './dateTime';
 
 export type TableDurationType = '4h' | 'all_day';
 
@@ -40,8 +40,8 @@ export function resolveSessionDurationType(session: TableSessionLike): TableDura
   if (isPackage4hServiceType(session.serviceType)) return '4h';
   if (isFullDayServiceType(session.serviceType)) return 'all_day';
 
-  const start = parseApiDateTime(session.startTime);
-  const end = parseApiDateTime(session.endTime);
+  const start = parseVNWallDateTime(session.startTime);
+  const end = parseVNWallDateTime(session.endTime);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 'all_day';
 
   const diffMs = end.getTime() - start.getTime();
@@ -67,7 +67,7 @@ export function getTableCardDisplay(
   now: Date = new Date(),
 ): TableCardDisplay {
   const durationType = resolveSessionDurationType(session);
-  const end = parseApiDateTime(session.endTime);
+  const end = parseVNWallDateTime(session.endTime);
   const remainingTimeMs = Number.isNaN(end.getTime())
     ? Number.POSITIVE_INFINITY
     : end.getTime() - now.getTime();

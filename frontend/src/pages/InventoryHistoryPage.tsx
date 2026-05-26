@@ -9,6 +9,7 @@ import {
 } from '../utils/dateRangeFilter';
 import './InventoryHistoryPage.css';
 import './InventoryManagementPage.css';
+import CustomSelect from '../components/CustomSelect';
 
 const TRANSACTION_TYPE_LABEL: Record<string, string> = {
   IMPORT: 'Nhập kho',
@@ -185,13 +186,18 @@ export default function InventoryHistoryPage() {
             <input type="date" className="date-input" value={toDate} min={fromDate || undefined} max={todayStr} onChange={handleToDateChange} />
           </div>
 
-          <select className="history-type-select" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>
-            <option value="ALL">Tất cả loại biến động</option>
-            <option value="IMPORT">Nhập kho</option>
-            <option value="EXPORT">Xuất kho</option>
-            <option value="SALE">Bán hàng</option>
-            <option value="ADJUSTMENT">Điều chỉnh</option>
-          </select>
+          <CustomSelect 
+            className="history-type-select" 
+            value={actionFilter} 
+            onChange={(val) => setActionFilter(val)}
+            options={[
+              { value: "ALL", label: "Tất cả loại biến động" },
+              { value: "IMPORT", label: "Nhập kho" },
+              { value: "EXPORT", label: "Xuất kho" },
+              { value: "SALE", label: "Bán hàng" },
+              { value: "ADJUSTMENT", label: "Điều chỉnh" }
+            ]}
+          />
 
           <div className="history-results-count">{filteredRows.length} kết quả</div>
         </div>

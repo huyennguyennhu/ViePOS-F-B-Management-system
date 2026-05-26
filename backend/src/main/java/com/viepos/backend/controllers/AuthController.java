@@ -2,6 +2,7 @@ package com.viepos.backend.controllers;
 
 import com.viepos.backend.models.User;
 import com.viepos.backend.models.enums.EmployeeRole;
+import com.viepos.backend.models.enums.EmployeeStatus;
 import com.viepos.backend.repositories.UserRepository;
 import com.viepos.backend.security.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -73,6 +74,10 @@ public class AuthController {
         EmployeeRole role = user.getEmployee().getRole();
         if (role != EmployeeRole.ADMIN && role != EmployeeRole.ROOT_ADMIN) {
             return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Incorrect email or password"));
+        }
+
+        if (user.getEmployee().getStatus() != EmployeeStatus.ACTIVE) {
+            return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Tài khoản của bạn đã bị vô hiệu hóa hoặc nghỉ việc."));
         }
 
         user.setLastLoginAt(LocalDateTime.now());

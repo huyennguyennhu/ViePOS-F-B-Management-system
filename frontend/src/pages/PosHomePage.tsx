@@ -14,6 +14,7 @@ import {
   isValidDateRange,
 } from '../utils/dateRangeFilter';
 import { splitDateTimeVN } from '../utils/dateTime';
+import CustomSelect from '../components/CustomSelect';
 import './PosHomePage.css';
 
 const renderCustomizedLabel = ({ cx, cy, midAngle, outerRadius, percent }: any) => {
@@ -241,18 +242,21 @@ export default function PosHomePage() {
         <div className="home-filter-container">
           <div className="time-filter-wrapper">
             <Calendar size={18} color="#3b9016" />
-            <select value={timeFilter} onChange={(e) => {
-              const val = e.target.value;
-              setTimeFilter(val);
-              if (val === 'custom') { setStartDate(todayStr); setEndDate(todayStr); }
-            }} className="time-filter-select">
-              <option value="today">Hôm nay</option>
-              <option value="yesterday">Hôm qua</option>
-              <option value="week">Tuần này</option>
-              <option value="month">Tháng này</option>
-              <option value="custom">Tùy chỉnh khoảng ngày...</option>
-            </select>
-            <ChevronDown size={16} color="#666" style={{ pointerEvents: 'none' }} />
+            <CustomSelect 
+              value={timeFilter} 
+              onChange={(val) => {
+                setTimeFilter(val);
+                if (val === 'custom') { setStartDate(todayStr); setEndDate(todayStr); }
+              }} 
+              className="time-filter-select"
+              options={[
+                { value: 'today', label: 'Hôm nay' },
+                { value: 'yesterday', label: 'Hôm qua' },
+                { value: 'week', label: 'Tuần này' },
+                { value: 'month', label: 'Tháng này' },
+                { value: 'custom', label: 'Tùy chỉnh khoảng ngày...' },
+              ]}
+            />
           </div>
           {timeFilter === 'custom' && (
             <div className="pos-custom-date-range">

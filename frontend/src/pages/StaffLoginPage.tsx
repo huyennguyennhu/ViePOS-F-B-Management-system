@@ -254,6 +254,7 @@ export default function StaffLoginPage() {
               {error}
             </div>
           )}
+        </form>
 
           {/* Forgot PIN Modal */}
           {isForgotModalOpen && (
@@ -262,52 +263,54 @@ export default function StaffLoginPage() {
               backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 999
             }}>
               <div style={{
-                backgroundColor: 'white', padding: '24px', borderRadius: '12px', width: '90%', maxWidth: '400px'
+                backgroundColor: 'white', padding: '24px', borderRadius: '12px', width: '90%', maxWidth: '400px', display: 'flex', flexDirection: 'column'
               }}>
                 <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#111' }}>Yêu Cầu Cấp Lại Mã PIN</h3>
                 
-                <div className="staff-form-group">
-                  <label>Email của bạn</label>
-                  <input 
-                    type="email" 
-                    className="staff-pin-input"
-                    style={{ width: '100%', padding: '12px', boxSizing: 'border-box', border: '1px solid #ccc', borderRadius: '8px' }}
-                    placeholder="abc@gmail.com"
-                    value={forgotEmail}
-                    onChange={e => setForgotEmail(e.target.value)}
-                  />
-                </div>
-
-                <div className="staff-form-group">
-                  <label>Mã PIN Mới (6 số)</label>
-                  <input 
-                    type="password" 
-                    maxLength={6}
-                    className="staff-pin-input"
-                    style={{ width: '100%', padding: '12px', boxSizing: 'border-box', border: '1px solid #ccc', borderRadius: '8px', letterSpacing: '8px', fontFamily: 'monospace' }}
-                    placeholder="••••••"
-                    value={forgotPin}
-                    onChange={e => setForgotPin(e.target.value)}
-                  />
-                </div>
-
-                {forgotMessage && (
-                  <div style={{ marginBottom: '16px', padding: '10px', backgroundColor: forgotMessage.includes('thành công') ? '#d4edda' : '#f8d7da', color: forgotMessage.includes('thành công') ? '#155724' : '#721c24', borderRadius: '6px', fontSize: '13px' }}>
-                    {forgotMessage}
+                <form onSubmit={handleForgotSubmit} style={{ flex: '1 1 0%', display: 'flex', flexDirection: 'column' }}>
+                  <div className="staff-form-group">
+                    <label>Email của bạn</label>
+                    <input 
+                      type="email" 
+                      className="staff-modal-input"
+                      placeholder="abc@gmail.com"
+                      value={forgotEmail}
+                      onChange={e => setForgotEmail(e.target.value)}
+                      required
+                    />
                   </div>
-                )}
 
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button type="button" onClick={() => setIsForgotModalOpen(false)} style={{ flex: 1, padding: '12px', backgroundColor: '#f1f1f1', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>Huỷ</button>
-                  <button type="button" onClick={handleForgotSubmit} disabled={forgotSubmitting} style={{ flex: 1, padding: '12px', backgroundColor: '#256E05', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>
-                    {forgotSubmitting ? 'Đang gửi...' : 'Gửi Yêu Cầu'}
-                  </button>
-                </div>
+                  <div className="staff-form-group" style={{ flex: 1 }}>
+                    <label>Mã PIN Mới (6 số)</label>
+                    <input 
+                      type="password" 
+                      maxLength={6}
+                      className="staff-modal-input"
+                      style={{ letterSpacing: '8px', fontFamily: 'monospace' }}
+                      placeholder="••••••"
+                      value={forgotPin}
+                      onChange={e => setForgotPin(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  {forgotMessage && (
+                    <div style={{ marginBottom: '16px', padding: '10px', backgroundColor: forgotMessage.includes('thành công') ? '#d4edda' : '#f8d7da', color: forgotMessage.includes('thành công') ? '#155724' : '#721c24', borderRadius: '6px', fontSize: '13px' }}>
+                      {forgotMessage}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '10px', marginTop: 'auto' }}>
+                    <button type="button" onClick={() => setIsForgotModalOpen(false)} style={{ flex: 1, padding: '12px', backgroundColor: '#f1f1f1', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>Huỷ</button>
+                    <button type="submit" disabled={forgotSubmitting} style={{ flex: 1, padding: '12px', backgroundColor: '#256E05', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>
+                      {forgotSubmitting ? 'Đang gửi...' : 'Gửi Yêu Cầu'}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           )}
 
-        </form>
       </div>
     </div>
   );

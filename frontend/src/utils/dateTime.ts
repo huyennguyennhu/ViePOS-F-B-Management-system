@@ -7,9 +7,10 @@ function hasTimezoneSuffix(s: string): boolean {
 }
 
 /**
- * Parse datetime từ backend.
- * TIMESTAMP / LocalDateTime trong DB = giờ tường Việt Nam (không có TZ).
- * Chuỗi naive → +07:00; chuỗi có offset/Z → parse trực tiếp.
+ * Parse datetime từ bảng ORDERS (created_at, completed_at).
+ * Backend Spring Boot trên Render chạy múi giờ UTC.
+ * Chuỗi naive (không có suffix) = UTC → gắn 'Z'.
+ * Chuỗi đã có offset/Z → parse trực tiếp.
  */
 export function parseApiDateTime(value: string | null | undefined): Date {
   if (!value) return new Date(NaN);
@@ -19,6 +20,25 @@ export function parseApiDateTime(value: string | null | undefined): Date {
     return new Date(s);
   }
   const iso = s.includes('T') ? s : `${s}T00:00:00`;
+  // Naive string từ bảng orders = UTC (server Render chạy UTC)
+  return new Date(`${iso}Z`);
+}
+
+/**
+ * Parse datetime từ bảng SERVICE_CARDS (startedAt, expectedEndAt).
+ * Backend lưu giờ tường Việt Nam (VN wall-clock, UTC+7) vào các cột này.
+ * Chuỗi naive (không có suffix) = +07:00.
+ * Chuỗi đã có offset/Z → parse trực tiếp.
+ */
+export function parseVNWallDateTime(value: string | null | undefined): Date {
+  if (!value) return new Date(NaN);
+  const s = value.trim();
+  if (!s) return new Date(NaN);
+  if (hasTimezoneSuffix(s)) {
+    return new Date(s);
+  }
+  const iso = s.includes('T') ? s : `${s}T00:00:00`;
+  // Naive string từ service_cards = giờ VN wall-clock
   return new Date(`${iso}${VN_OFFSET}`);
 }
 
@@ -66,9 +86,10 @@ export function splitDateTimeVN(value: string | null | undefined): {
   return { date, time, full: `${time} - ${date}` };
 }
 
-/** Giờ:phút (GMT+7) — dùng cho thẻ bàn "Vào lúc …". */
+/** Giờ:phút (GMT+7) — dùng cho thẻ bàn "Vào lúc …" (startedAt từ service_cards). */
 export function formatTimeVN(value: string | null | undefined): string {
-  const d = parseApiDateTime(value);
+  // Session times (service_cards) lưu giờ VN wall-clock → dùng parseVNWallDateTime
+  const d = parseVNWallDateTime(value);
   if (Number.isNaN(d.getTime())) return '--';
   return d.toLocaleTimeString('vi-VN', {
     timeZone: VN_TIMEZONE,

@@ -5,7 +5,7 @@ import { Plus, AlertTriangle, RefreshCw, Search, X } from 'lucide-react';
 import './PosTablesPage.css';
 import { mapPosProduct, posUnitPrice, type PosProduct } from '../utils/posProduct';
 import { isItemPackage4h, rowBackground } from '../utils/orderItemDisplay';
-import { formatTimeVN, parseApiDateTime } from '../utils/dateTime';
+import { formatTimeVN, parseVNWallDateTime } from '../utils/dateTime';
 import {
   getTableCardDisplay,
   resolveSessionDurationType,
@@ -258,7 +258,7 @@ export default function PosTablesPage() {
       setCards(sortedCards);
 
       const sortedSessions = [...normalizedSessions].sort((a, b) =>
-        parseApiDateTime(b.startTime).getTime() - parseApiDateTime(a.startTime).getTime()
+        parseVNWallDateTime(b.startTime).getTime() - parseVNWallDateTime(a.startTime).getTime()
       );
       setSessions(sortedSessions);
     } catch (err) {
@@ -673,13 +673,13 @@ export default function PosTablesPage() {
                 <div className="tables-info-item">
                   <span className="tables-info-label">Ngày:</span>
                   <span className="tables-info-value">
-                    {parseApiDateTime(selectedSessionForDetail.startTime).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    {parseVNWallDateTime(selectedSessionForDetail.startTime).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric' })}
                   </span>
                 </div>
                 <div className="tables-info-item">
                   <span className="tables-info-label">Giờ vào:</span>
                   <span className="tables-info-value">
-                    {parseApiDateTime(selectedSessionForDetail.startTime).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' })}
+                    {parseVNWallDateTime(selectedSessionForDetail.startTime).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
                 {(() => {
@@ -692,7 +692,7 @@ export default function PosTablesPage() {
                       <div className="tables-info-item">
                         <span className="tables-info-label">Dự kiến ra:</span>
                         <span className="tables-info-value">
-                          {parseApiDateTime(selectedSessionForDetail.endTime).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' })}
+                          {parseVNWallDateTime(selectedSessionForDetail.endTime).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
                       <div className="tables-info-item">

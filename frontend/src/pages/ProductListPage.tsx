@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { Search, Trash2, Eye, Edit2, Image as ImageIcon, X } from 'lucide-react';
 import api from '../services/api';
 import { showToast } from '../components/Toast';
+import CustomSelect from "../components/CustomSelect";
 import './ProductListPage.css';
 
 const categoryPrices: Record<string, { takeaway: string, h4: string, allday: string }> = {
@@ -380,7 +381,14 @@ export default function ProductListPage() {
             <Trash2 size={18} />
             {selectedProducts.length > 0 && <span>Xóa {selectedProducts.length} mục</span>}
           </button>
-          <button className="btn-add-product" onClick={() => setIsAddModalOpen(true)}>+ Thêm sản phẩm</button>
+          <button className="btn-add-product" onClick={() => {
+            setNewCategory('');
+            setNewProductName('');
+            setNewThreshold('5');
+            setImagePreview(null);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            setIsAddModalOpen(true);
+          }}>+ Thêm sản phẩm</button>
         </div>
       </div>
 
@@ -397,28 +405,28 @@ export default function ProductListPage() {
           />
         </div>
 
-        <select 
+        <CustomSelect 
           className="product-filter-select"
           value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-        >
-          <option value="">Tất cả danh mục</option>
-          {categories
-            .filter((c: any) => c.name?.toUpperCase() !== 'KHÁC' || (c.productCount ?? 0) > 0)
-            .map((c: any) => (
-              <option key={c.id} value={c.name}>{c.name}</option>
-            ))}
-        </select>
+          onChange={(val) => setCategoryFilter(val)}
+          options={[
+            { value: "", label: "Tất cả danh mục" },
+            ...categories
+              .filter((c: any) => c.name?.toUpperCase() !== 'KHÁC' || (c.productCount ?? 0) > 0)
+              .map((c: any) => ({ value: c.name, label: c.name }))
+          ]}
+        />
 
-        <select 
+        <CustomSelect 
           className="product-filter-select"
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          <option value="">Tất cả trạng thái</option>
-          <option value="Đang bán">Đang bán</option>
-          <option value="Ngừng bán">Ngừng bán</option>
-        </select>
+          onChange={(val) => setStatusFilter(val)}
+          options={[
+            { value: "", label: "Tất cả trạng thái" },
+            { value: "Đang bán", label: "Đang bán" },
+            { value: "Ngừng bán", label: "Ngừng bán" }
+          ]}
+        />
 
         <div className="product-result-count">
           Kết quả: <span className="product-result-number">{filteredProducts.length} sản phẩm</span>
@@ -653,16 +661,17 @@ export default function ProductListPage() {
 
                 <div className="form-group">
                   <label>Danh Mục <span style={{ color: 'red' }}>*</span></label>
-                  <select 
+                  <CustomSelect 
                     className="form-select" 
                     value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                  >
-                  <option value="" disabled hidden>- Chọn danh mục -</option>
-                    {categories.filter((c: any) => c.name.toUpperCase() !== 'KHÁC' || c.productCount > 0).map((c: any) => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setNewCategory(val)}
+                    placeholder="- Chọn danh mục -"
+                    options={
+                      categories
+                        .filter((c: any) => c.name?.toUpperCase() !== 'KHÁC' || (c.productCount ?? 0) > 0)
+                        .map((c: any) => ({ value: c.name, label: c.name }))
+                    }
+                  />
                 </div>
 
                 <div className="form-group">
@@ -1000,16 +1009,17 @@ export default function ProductListPage() {
 
                 <div className="form-group">
                   <label>Danh Mục <span style={{ color: 'red' }}>*</span></label>
-                  <select 
+                  <CustomSelect 
                     className="form-select" 
                     value={editCategory}
-                    onChange={(e) => setEditCategory(e.target.value)}
-                  >
-                    <option value="" disabled hidden>- Chọn danh mục -</option>
-                    {categories.filter((c: any) => c.name.toUpperCase() !== 'KHÁC' || c.productCount > 0).map((c: any) => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setEditCategory(val)}
+                    options={[
+                      { value: "", label: "- Chọn danh mục -" },
+                      ...categories
+                        .filter((c: any) => c.name.toUpperCase() !== 'KHÁC' || c.productCount > 0)
+                        .map((c: any) => ({ value: c.name, label: c.name }))
+                    ]}
+                  />
                 </div>
 
                 <div className="form-group">

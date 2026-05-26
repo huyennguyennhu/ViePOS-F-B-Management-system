@@ -6,6 +6,7 @@ import { showToast } from "../components/Toast";
 import { formatDateTimeVN, parseApiDateTime } from "../utils/dateTime";
 import NotifyDot from "../components/NotifyDot";
 import { notifyPendingApprovalsChanged } from "../hooks/usePendingApprovals";
+import CustomSelect from "../components/CustomSelect";
 import "./DashboardPage.css";
 import "./StaffManagementPage.css";
 
@@ -220,9 +221,10 @@ export default function StaffManagementPage() {
   };
 
   const confirmApproveSingle = async () => {
-    if (!approvingRequest) return;
+    if (!approvingRequest || loading) return;
     const { id, name, type } = approvingRequest;
     try {
+      setLoading(true);
       if (type === "account") {
         await staffAPI.approve(id);
         showMessage(`Đã duyệt tài khoản cho nhân viên ${name}.`);
@@ -235,15 +237,18 @@ export default function StaffManagementPage() {
       }
       fetchTab2Data();
       setApprovingRequest(null);
-    } catch (err) {
-      showToast("Lỗi khi duyệt yêu cầu!", "error");
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || "Lỗi khi duyệt yêu cầu!", "error");
+    } finally {
+      setLoading(false);
     }
   };
 
   const confirmRejectSingle = async () => {
-    if (!rejectingRequest) return;
+    if (!rejectingRequest || loading) return;
     const { id, name, type } = rejectingRequest;
     try {
+      setLoading(true);
       // Tạm thời chưa truyền rejectReason vì API chưa hỗ trợ
       if (type === "account") {
         await staffAPI.reject(id);
@@ -257,13 +262,15 @@ export default function StaffManagementPage() {
       }
       fetchTab2Data();
       setRejectingRequest(null);
-    } catch (err) {
-      showToast("Lỗi khi từ chối yêu cầu!", "error");
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || "Lỗi khi từ chối yêu cầu!", "error");
+    } finally {
+      setLoading(false);
     }
   };
 
   const confirmApproveMultiple = async () => {
-    if (selectedIds.length === 0) return;
+    if (selectedIds.length === 0 || loading) return;
     try {
       setLoading(true);
       if (pendingSubTab === "accounts") {
@@ -486,15 +493,16 @@ export default function StaffManagementPage() {
             />
           </div>
 
-          <select
+          <CustomSelect
             className="staff-filter-select"
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-          >
-            <option value="ALL">Tất cả trạng thái</option>
-            <option value="APPROVED">Đang làm việc</option>
-            <option value="REJECTED">Đã nghỉ / Khoá</option>
-          </select>
+            onChange={(val) => setFilterStatus(val)}
+            options={[
+              { value: "ALL", label: "Tất cả trạng thái" },
+              { value: "APPROVED", label: "Đang làm việc" },
+              { value: "REJECTED", label: "Đã nghỉ / Khoá" },
+            ]}
+          />
 
           <div className="staff-results-count">
             Kết quả:{" "}
@@ -1018,16 +1026,17 @@ export default function StaffManagementPage() {
             />
           </div>
 
-          <select
+          <CustomSelect
             className="staff-filter-select"
             value={historyTypeFilter}
-            onChange={(e) => setHistoryTypeFilter(e.target.value)}
-          >
-            <option value="ALL">Tất cả loại yêu cầu</option>
-            <option value="Cấp tài khoản mới">Cấp tài khoản mới</option>
-            <option value="Đổi mã PIN">Đổi mã PIN</option>
-            <option value="Quên mã PIN">Quên mã PIN</option>
-          </select>
+            onChange={(val) => setHistoryTypeFilter(val)}
+            options={[
+              { value: "ALL", label: "Tất cả loại yêu cầu" },
+              { value: "Cấp tài khoản mới", label: "Cấp tài khoản mới" },
+              { value: "Đổi mã PIN", label: "Đổi mã PIN" },
+              { value: "Quên mã PIN", label: "Quên mã PIN" },
+            ]}
+          />
 
           <div className="staff-results-count">
             Kết quả:{" "}
@@ -1179,14 +1188,15 @@ export default function StaffManagementPage() {
                 <label>
                   Vai trò <span style={{ color: "red" }}>*</span>
                 </label>
-                <select
+                <CustomSelect
                   className="modal-input"
                   value={staffFormRole}
-                  onChange={(e) => setStaffFormRole(e.target.value)}
-                >
-                  <option value="Nhân viên">Nhân viên</option>
-                  <option value="Thu ngân">Thu ngân</option>
-                </select>
+                  onChange={(val) => setStaffFormRole(val)}
+                  options={[
+                    { value: "Nhân viên", label: "Nhân viên" },
+                    { value: "Thu ngân", label: "Thu ngân" },
+                  ]}
+                />
               </div>
               {/* <p style={{ margin: 0, fontSize: '13px', color: '#666' }}> */}
               {/* Tài khoản POS dùng mã PIN mặc định <strong>123456</strong> (đổi sau khi đăng nhập). Tài khoản Quản lý đăng nhập bằng mật khẩu, tạo riêng. */}
@@ -1275,26 +1285,28 @@ export default function StaffManagementPage() {
                 <label>
                   Vai trò <span style={{ color: "red" }}>*</span>
                 </label>
-                <select
+                <CustomSelect
                   className="modal-input"
                   value={staffFormRole}
-                  onChange={(e) => setStaffFormRole(e.target.value)}
-                >
-                  <option value="Quản lý">Quản lý</option>
-                  <option value="Nhân viên">Nhân viên</option>
-                  <option value="Thu ngân">Thu ngân</option>
-                </select>
+                  onChange={(val) => setStaffFormRole(val)}
+                  options={[
+                    { value: "Quản lý", label: "Quản lý" },
+                    { value: "Nhân viên", label: "Nhân viên" },
+                    { value: "Thu ngân", label: "Thu ngân" },
+                  ]}
+                />
               </div>
               <div className="form-group">
                 <label>Trạng thái</label>
-                <select
+                <CustomSelect
                   className="modal-input"
                   value={staffFormStatus}
-                  onChange={(e) => setStaffFormStatus(e.target.value)}
-                >
-                  <option value="APPROVED">Đang làm việc</option>
-                  <option value="REJECTED">Đã nghỉ / Khoá</option>
-                </select>
+                  onChange={(val) => setStaffFormStatus(val)}
+                  options={[
+                    { value: "APPROVED", label: "Đang làm việc" },
+                    { value: "REJECTED", label: "Đã nghỉ / Khoá" },
+                  ]}
+                />
               </div>
             </div>
 
@@ -1488,8 +1500,16 @@ export default function StaffManagementPage() {
               >
                 Hủy
               </button>
-              <button className="btn-save" onClick={confirmApproveSingle}>
-                Duyệt Ngay
+              <button 
+                className="btn-save" 
+                onClick={confirmApproveSingle}
+                disabled={loading}
+                style={{
+                  backgroundColor: loading ? "#ccc" : "#256e05",
+                  cursor: loading ? "not-allowed" : "pointer",
+                }}
+              >
+                {loading ? "Đang xử lý..." : "Duyệt Ngay"}
               </button>
             </div>
           </div>
@@ -1560,8 +1580,16 @@ export default function StaffManagementPage() {
               >
                 Hủy
               </button>
-              <button className="btn-save" onClick={confirmApproveMultiple}>
-                Duyệt Tất Cả
+              <button 
+                className="btn-save" 
+                onClick={confirmApproveMultiple}
+                disabled={loading}
+                style={{
+                  backgroundColor: loading ? "#ccc" : "#256e05",
+                  cursor: loading ? "not-allowed" : "pointer",
+                }}
+              >
+                {loading ? "Đang xử lý..." : "Duyệt Tất Cả"}
               </button>
             </div>
           </div>
@@ -1606,14 +1634,14 @@ export default function StaffManagementPage() {
               <button
                 className="btn-save"
                 style={{
-                  backgroundColor: !rejectReason.trim() ? "#ccc" : "#dc3545",
+                  backgroundColor: !rejectReason.trim() || loading ? "#ccc" : "#dc3545",
                   border: "none",
-                  cursor: !rejectReason.trim() ? "not-allowed" : "pointer",
+                  cursor: !rejectReason.trim() || loading ? "not-allowed" : "pointer",
                 }}
                 onClick={confirmRejectSingle}
-                disabled={!rejectReason.trim()}
+                disabled={!rejectReason.trim() || loading}
               >
-                Xác Nhận Từ Chối
+                {loading ? "Đang xử lý..." : "Xác Nhận Từ Chối"}
               </button>
             </div>
           </div>

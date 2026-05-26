@@ -169,6 +169,24 @@
   -moz-appearance: textfield;
 }
 
+.staff-modal-input {
+  width: 100%;
+  padding: 14px;
+  background-color: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: #333;
+  outline: none;
+  transition: box-shadow 0.2s, border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.staff-modal-input:focus {
+  border-color: #256E05;
+  box-shadow: 0 0 0 2px rgba(60, 176, 24, 0.2);
+}
+
 .staff-options-row {
   display: flex;
   justify-content: space-between;

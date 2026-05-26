@@ -6,6 +6,7 @@ import arrowWhite from '../../assets/icon/arrow_white.png';
 import iconPosDarkgreen from '../../assets/icon/pos_darkgreen.png';
 import iconEditGrey from '../../assets/icon/edit_grey.png';
 import './PosSalesPage.css';
+import CustomSelect from '../components/CustomSelect';
 import { mapPosProduct, posUnitPrice, type PosProduct } from '../utils/posProduct';
 
 type Product = PosProduct;
@@ -93,6 +94,9 @@ export default function PosSalesPage() {
     displayId?: string;
   }>({ open: false, title: '', message: '' });
 
+  // State cho Popup hết thẻ
+  const [noCardDialog, setNoCardDialog] = useState(false);
+
   const showConfirm = (message: string, onConfirm: () => void) => {
     setConfirmDialog({ open: true, message, onConfirm });
   };
@@ -148,6 +152,12 @@ export default function PosSalesPage() {
   // Lưu món đã điều chỉnh
   const handleSaveEditedItem = () => {
     if (!editingCartItemId) return;
+    
+    if (!lockedCardNumber && serveType === 'dine_in' && freeCards.length === 0) {
+      setNoCardDialog(true);
+      return;
+    }
+
     setCartItems(prev => prev.map(item => {
       if (item.id === editingCartItemId) {
         return {
@@ -195,6 +205,12 @@ export default function PosSalesPage() {
 
   // Lưu cấu hình chỉnh sửa hàng loạt
   const handleSaveEditAll = () => {
+    const hasDineIn = editAllItems.some(item => item.serveType === 'dine_in');
+    if (!lockedCardNumber && hasDineIn && freeCards.length === 0) {
+      setNoCardDialog(true);
+      return;
+    }
+
     const merged: CartItem[] = [];
     editAllItems.forEach(item => {
       // Find if there's an identical item in the merged array
@@ -231,6 +247,11 @@ export default function PosSalesPage() {
   const handleAddToCart = (openCart: boolean) => {
     if (!selectedProduct) return;
     
+    if (!lockedCardNumber && serveType === 'dine_in' && freeCards.length === 0) {
+      setNoCardDialog(true);
+      return;
+    }
+
     const newItem: CartItem = {
       id: Date.now().toString() + Math.random().toString(36).substring(7),
       product: selectedProduct,
@@ -325,7 +346,7 @@ export default function PosSalesPage() {
 
     const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
-    const actualCashReceived = paymentMethod === 'cash' ? (parseInt(cashInput) || finalTotal) : finalTotal;
+    const actualCashReceived = paymentMethod === 'cash' ? (parseInt(cashInput) || 0) : 0;
 
     try {
       await cardAPI.startSession({
@@ -475,7 +496,7 @@ export default function PosSalesPage() {
           }
 
           if (cartItems.length > 0 && orderId) {
-            const actualCashReceived = paymentMethod === 'cash' ? (parseInt(cashInput) || finalTotal) : finalTotal;
+            const actualCashReceived = paymentMethod === 'cash' ? (parseInt(cashInput) || 0) : 0;
             await orderAPI.appendItems({
               orderCode: orderId,
               paymentMethod: paymentMethod === 'cash' ? 'cash' : 'transfer',
@@ -560,7 +581,7 @@ export default function PosSalesPage() {
       }
       
       try {
-        const actualCashReceived = paymentMethod === 'cash' ? (parseInt(cashInput) || finalTotal) : finalTotal;
+        const actualCashReceived = paymentMethod === 'cash' ? (parseInt(cashInput) || 0) : 0;
         await orderAPI.createTakeaway({
           orderId: taOrderId,
           paymentMethod: paymentMethod === 'cash' ? 'cash' : 'transfer',
@@ -651,14 +672,19 @@ export default function PosSalesPage() {
         setProducts(data);
         const cats = ['Tất cả', ...Array.from(new Set(data.map(p => p.categoryName)))];
         setCategories(cats);
+
+        if (!lockedCardNumber) {
+          const cardsRes = await cardAPI.getFreeCards();
+          setFreeCards(cardsRes.data || []);
+        }
       } catch (err) {
-        console.error('Không thể tải danh sách sản phẩm:', err);
+        console.error('Không thể tải danh sách sản phẩm hoặc thẻ:', err);
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, []);
+  }, [lockedCardNumber]);
 
   const filteredProducts = products.filter(p => {
     const matchCategory = selectedCategory === 'Tất cả' || p.categoryName === selectedCategory;
@@ -1068,6 +1094,19 @@ export default function PosSalesPage() {
           </div>
         </div>
       )}
+
+      {/* Custom No Card Dialog */}
+      {noCardDialog && (
+        <div className="pos-confirm-overlay">
+          <div className="pos-confirm-box" onClick={(e) => e.stopPropagation()}>
+            <p className="pos-confirm-message">Hiện tại cửa hàng đã hết thẻ trống! Quý khách vui lòng chọn Mang đi hoặc đợi có bàn/thẻ trống.</p>
+            <div className="pos-confirm-actions">
+              <button className="pos-confirm-cancel" onClick={() => setNoCardDialog(false)}>Hủy</button>
+              <button className="pos-confirm-ok" onClick={() => navigate('/pos/tables')}>Đến thẻ bàn</button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Edit All Items Popup */}
       {isEditAllOpen && (
         <div className="pos-modal-overlay">
@@ -1098,14 +1137,15 @@ export default function PosSalesPage() {
                     <div className="pos-edit-all-row-second">
                       {/* Select Dropdown */}
                       <div className="pos-edit-all-select-wrapper">
-                        <select 
+                        <CustomSelect 
                           className="pos-edit-all-select"
                           value={item.serveType}
-                          onChange={(e) => handleEditAllChange(item.id, 'serveType', e.target.value)}
-                        >
-                          <option value="takeaway">Mang đi</option>
-                          <option value="dine_in">Tại chỗ</option>
-                        </select>
+                          onChange={(val) => handleEditAllChange(item.id, 'serveType', val)}
+                          options={[
+                            { value: 'takeaway', label: 'Mang đi' },
+                            { value: 'dine_in', label: 'Tại chỗ' }
+                          ]}
+                        />
                       </div>
 
                       {/* Radio buttons */}

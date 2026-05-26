@@ -105,9 +105,29 @@
   font-family: inherit;
 }
 
+.orders-result-count {
+  margin-left: auto;
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+  background-color: #f2fcf5;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid #d8e8d0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.orders-result-count strong {
+  color: #256e05;
+  font-size: 16px;
+  font-weight: 700;
+}
+
 .orders-filter-select {
-  padding: 8px 12px;
-  border: 1px solid #ddd;
+  /* padding: 8px 12px;
+  border: 1px solid #ddd; */
   border-radius: 6px;
   font-size: 14px;
   outline: none;

@@ -175,6 +175,12 @@ public class StaffController {
         Optional<AccountRequest> reqOpt = requestRepository.findById(UUID.fromString(id));
         if (reqOpt.isPresent() && reqOpt.get().getRequestType() == RequestType.REGISTER) {
             AccountRequest req = reqOpt.get();
+            if (req.getStatus() != RequestStatus.PENDING) {
+                return ResponseEntity.status(400).body(Map.of("message", "Yêu cầu này đã được xử lý."));
+            }
+            if (userRepository.existsByEmail(req.getRequestEmail())) {
+                return ResponseEntity.status(400).body(Map.of("message", "Email này đã tồn tại trong hệ thống."));
+            }
             User currentUser = getCurrentUser();
             if (currentUser != null && currentUser.getEmployee() != null) {
                 req.setApprovedBy(currentUser.getEmployee());
@@ -212,6 +218,9 @@ public class StaffController {
         Optional<AccountRequest> reqOpt = requestRepository.findById(UUID.fromString(id));
         if (reqOpt.isPresent() && reqOpt.get().getRequestType() == RequestType.REGISTER) {
             AccountRequest req = reqOpt.get();
+            if (req.getStatus() != RequestStatus.PENDING) {
+                return ResponseEntity.status(400).body(Map.of("message", "Yêu cầu này đã được xử lý."));
+            }
             User currentUser = getCurrentUser();
             if (currentUser != null && currentUser.getEmployee() != null) {
                 req.setApprovedBy(currentUser.getEmployee());
@@ -248,6 +257,10 @@ public class StaffController {
             return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Email hoặc mã PIN không chính xác."));
         }
 
+        if (user.getEmployee().getStatus() != EmployeeStatus.ACTIVE) {
+            return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Tài khoản của bạn đã bị vô hiệu hóa hoặc nghỉ việc."));
+        }
+
         try {
             authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(email, pin));
         } catch (Exception e) {
@@ -274,6 +287,11 @@ public class StaffController {
         String email = request.get("email");
         String pin = request.get("pin");
 
+        Optional<User> userOpt = userRepository.findByEmail(email);
+        if (userOpt.isPresent() && userOpt.get().getEmployee() != null && userOpt.get().getEmployee().getStatus() != EmployeeStatus.ACTIVE) {
+            return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Tài khoản của bạn đã bị vô hiệu hóa hoặc nghỉ việc."));
+        }
+
         try {
             authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(email, pin));
             return ResponseEntity.ok(Map.of("ok", true, "message", "Mã PIN chính xác."));
@@ -290,6 +308,9 @@ public class StaffController {
 
         Optional<User> userOpt = userRepository.findByEmail(email);
         if (userOpt.isEmpty()) return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Tài khoản không tồn tại."));
+        if (userOpt.get().getEmployee() != null && userOpt.get().getEmployee().getStatus() != EmployeeStatus.ACTIVE) {
+            return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Tài khoản của bạn đã bị vô hiệu hóa hoặc nghỉ việc."));
+        }
 
         try {
             authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(email, oldPin));
@@ -314,6 +335,9 @@ public class StaffController {
 
         Optional<User> userOpt = userRepository.findByEmail(email);
         if (userOpt.isEmpty()) return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Email không tồn tại trong hệ thống."));
+        if (userOpt.get().getEmployee() != null && userOpt.get().getEmployee().getStatus() != EmployeeStatus.ACTIVE) {
+            return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Tài khoản của bạn đã bị vô hiệu hóa hoặc nghỉ việc."));
+        }
 
         AccountRequest req = new AccountRequest();
         req.setRequestCode("REQ" + System.currentTimeMillis());
@@ -358,6 +382,9 @@ public class StaffController {
         Optional<AccountRequest> reqOpt = requestRepository.findById(UUID.fromString(id));
         if (reqOpt.isPresent()) {
             AccountRequest req = reqOpt.get();
+            if (req.getStatus() != RequestStatus.PENDING) {
+                return ResponseEntity.status(400).body(Map.of("message", "Yêu cầu này đã được xử lý."));
+            }
             User currentUser = getCurrentUser();
             if (currentUser != null && currentUser.getEmployee() != null) {
                 req.setApprovedBy(currentUser.getEmployee());
@@ -383,6 +410,9 @@ public class StaffController {
         Optional<AccountRequest> reqOpt = requestRepository.findById(UUID.fromString(id));
         if (reqOpt.isPresent()) {
             AccountRequest req = reqOpt.get();
+            if (req.getStatus() != RequestStatus.PENDING) {
+                return ResponseEntity.status(400).body(Map.of("message", "Yêu cầu này đã được xử lý."));
+            }
             User currentUser = getCurrentUser();
             if (currentUser != null && currentUser.getEmployee() != null) {
                 req.setApprovedBy(currentUser.getEmployee());

@@ -11,6 +11,7 @@ import {
 } from "../utils/dateRangeFilter";
 import { parseApiDateTime, splitDateTimeVN } from "../utils/dateTime";
 import iconExportExcel from "../../assets/icon/exportexcel_white.png";
+import CustomSelect from "../components/CustomSelect";
 import "./OrderManagementPage.css";
 
 interface OrderProduct {
@@ -227,8 +228,8 @@ export default function OrderManagementPage() {
           .map((row) => mapOrderFromApi(row))
           .sort(
             (a, b) =>
-              parseApiDateTime(b.createdAt).getTime() -
-              parseApiDateTime(a.createdAt).getTime()
+              parseApiDateTime(b.completedAt || b.createdAt).getTime() -
+              parseApiDateTime(a.completedAt || a.createdAt).getTime()
           );
         setOrders(list);
         hasOrdersLoadedRef.current = list.length > 0;
@@ -435,7 +436,7 @@ export default function OrderManagementPage() {
 
   const handleExportExcel = () => {
     const exportData = filteredOrders.map((order) => {
-      const dt = formatDateTime(order.createdAt);
+      const dt = formatDateTime(order.completedAt || order.createdAt);
       return {
         "Mã Đơn": order.orderCode,
         Ngày: typeof dt === "object" ? dt.date : "",
@@ -536,31 +537,32 @@ export default function OrderManagementPage() {
                   }}
                 />
               </div>
+              <div className="orders-result-count">
+                Kết quả: <strong>{filteredOrders.length}</strong> đơn
+              </div>
             </div>
             <div className="orders-filter-row">
-              <select
+              <CustomSelect
                 className="orders-filter-select"
                 style={{ flex: 1 }}
                 value={employeeFilter}
-                onChange={(e) => setEmployeeFilter(e.target.value)}
-              >
-                <option value="all">Tất cả nhân viên</option>
-                {staffList.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-              <select
+                onChange={(val) => setEmployeeFilter(val)}
+                options={[
+                  { value: "all", label: "Tất cả nhân viên" },
+                  ...staffList.map((s) => ({ value: s.id, label: s.name }))
+                ]}
+              />
+              <CustomSelect
                 className="orders-filter-select"
                 style={{ flex: 1 }}
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <option value="all">Tất cả trạng thái</option>
-                <option value="COMPLETED">Hoàn tất</option>
-                <option value="CANCELLED">Đã hủy</option>
-              </select>
+                onChange={(val) => setStatusFilter(val)}
+                options={[
+                  { value: "all", label: "Tất cả trạng thái" },
+                  { value: "COMPLETED", label: "Hoàn tất" },
+                  { value: "CANCELLED", label: "Đã hủy" }
+                ]}
+              />
               <button
                 className="btn-clear-filter"
                 onClick={handleClearFilters}
@@ -605,7 +607,7 @@ export default function OrderManagementPage() {
                   </tr>
                 ) : filteredOrders.length > 0 ? (
                   filteredOrders.map((order) => {
-                    const dt = formatDateTime(order.createdAt);
+                    const dt = formatDateTime(order.completedAt || order.createdAt);
                     const isSelected = order.id === selectedOrderId;
                     return (
                       <tr
@@ -692,9 +694,9 @@ export default function OrderManagementPage() {
                   <div className="order-info-item">
                     <span className="order-info-label">Ngày:</span>
                     <span className="order-info-value">
-                      {typeof formatDateTime(selectedOrder.createdAt) ===
+                      {typeof formatDateTime(selectedOrder.completedAt || selectedOrder.createdAt) ===
                       "object"
-                        ? (formatDateTime(selectedOrder.createdAt) as any).date
+                        ? (formatDateTime(selectedOrder.completedAt || selectedOrder.createdAt) as any).date
                         : "--"}
                     </span>
                   </div>
@@ -705,11 +707,11 @@ export default function OrderManagementPage() {
                     </span>
                   </div>
                   <div className="order-info-item">
-                    <span className="order-info-label">Giờ tạo đơn:</span>
+                    <span className="order-info-label">Giờ hoàn thành:</span>
                     <span className="order-info-value">
-                      {typeof formatDateTime(selectedOrder.createdAt) ===
+                      {typeof formatDateTime(selectedOrder.completedAt || selectedOrder.createdAt) ===
                       "object"
-                        ? (formatDateTime(selectedOrder.createdAt) as any).time
+                        ? (formatDateTime(selectedOrder.completedAt || selectedOrder.createdAt) as any).time
                         : "--"}
                     </span>
                   </div>
@@ -897,11 +899,11 @@ export default function OrderManagementPage() {
               </div>
               <div className="order-summary-row small">
                 <span>Tiền khách trả</span>
-                <span>{formatCurrency(selectedOrder.cashReceived || selectedOrder.totalAmount)}</span>
+                <span>{formatCurrency(selectedOrder.cashReceived ?? selectedOrder.totalAmount)}</span>
               </div>
               <div className="order-summary-row small">
                 <span>Tiền thừa</span>
-                <span>{formatCurrency((selectedOrder.cashReceived || selectedOrder.totalAmount) - selectedOrder.totalAmount)}</span>
+                <span>{formatCurrency(Math.max(0, (selectedOrder.cashReceived ?? selectedOrder.totalAmount) - selectedOrder.totalAmount))}</span>
               </div>
               {selectedOrder.discountAmount > 0 && (
                 <div className="order-summary-row small">
