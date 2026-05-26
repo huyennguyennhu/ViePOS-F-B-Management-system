@@ -153,6 +153,12 @@ public class StaffController {
         if (employeeRepository.existsByPhone(phone)) {
             return ResponseEntity.badRequest().body(Map.of("message", "Số điện thoại này đã được sử dụng!"));
         }
+        if (requestRepository.existsByRequestEmailAndStatus(email, RequestStatus.PENDING)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Email này đang chờ được duyệt!"));
+        }
+        if (requestRepository.existsByRequestPhoneAndStatus(phone, RequestStatus.PENDING)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Số điện thoại này đang chờ được duyệt!"));
+        }
 
         AccountRequest req = new AccountRequest();
         req.setRequestCode("REQ" + System.currentTimeMillis());

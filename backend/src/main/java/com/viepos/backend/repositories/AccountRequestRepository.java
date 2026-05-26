@@ -15,4 +15,6 @@ public interface AccountRequestRepository extends JpaRepository<AccountRequest, 
     Optional<AccountRequest> findByRequestCode(String requestCode);
     List<AccountRequest> findByStatusOrderByCreatedAtDesc(RequestStatus status);
     List<AccountRequest> findByRequestTypeAndStatusOrderByCreatedAtDesc(RequestType requestType, RequestStatus status);
+    boolean existsByRequestEmailAndStatus(String requestEmail, RequestStatus status);
+    boolean existsByRequestPhoneAndStatus(String requestPhone, RequestStatus status);
 }

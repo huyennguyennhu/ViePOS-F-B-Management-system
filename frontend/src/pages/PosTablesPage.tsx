@@ -116,6 +116,13 @@ export default function PosTablesPage() {
   const [releaseLoading, setReleaseLoading] = useState(false);
   const [releaseError, setReleaseError] = useState<string | null>(null);
 
+  // Batch Release States
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [selectedCardsForBatch, setSelectedCardsForBatch] = useState<string[]>([]);
+  const [isBatchReleaseModalOpen, setIsBatchReleaseModalOpen] = useState(false);
+  const [batchReleaseLoading, setBatchReleaseLoading] = useState(false);
+  const [batchReleaseError, setBatchReleaseError] = useState<string | null>(null);
+
   // Real-time ticking timer
   useEffect(() => {
     const timer = setInterval(() => {
@@ -357,6 +364,56 @@ export default function PosTablesPage() {
     }
   };
 
+  const toggleCardSelection = (cardNumber: string) => {
+    setSelectedCardsForBatch(prev => 
+      prev.includes(cardNumber)
+        ? prev.filter(c => c !== cardNumber)
+        : [...prev, cardNumber]
+    );
+  };
+
+  const handleBatchReleaseConfirmed = async () => {
+    if (selectedCardsForBatch.length === 0) return;
+    setBatchReleaseLoading(true);
+    setBatchReleaseError(null);
+    try {
+      // Release multiple cards sequentially or via Promise.all
+      await Promise.all(selectedCardsForBatch.map(cardNumber => cardAPI.releaseCard(cardNumber)));
+      
+      // Update states locally
+      setCards(prev => prev.map(c => 
+        selectedCardsForBatch.includes(c.cardNumber) ? { ...c, status: 'trống' } : c
+      ));
+      setSessions(prev => prev.map(s => 
+        selectedCardsForBatch.includes(s.card.cardNumber) && !s.actualEndTime
+          ? { ...s, actualEndTime: new Date().toISOString(), status: 'Hoàn thành' }
+          : s
+      ));
+
+      // Sync pos_order_history status to Hoàn thành
+      const savedHistory = localStorage.getItem('pos_order_history');
+      if (savedHistory) {
+        const orderHistory = JSON.parse(savedHistory);
+        const updatedHistory = orderHistory.map((order: any) => 
+          selectedCardsForBatch.includes(order.cardNumber) && order.status === 'Đang dùng'
+            ? { ...order, status: 'Hoàn thành' }
+            : order
+        );
+        localStorage.setItem('pos_order_history', JSON.stringify(updatedHistory));
+      }
+
+      setIsBatchReleaseModalOpen(false);
+      setSelectedCardsForBatch([]);
+      setIsMultiSelectMode(false);
+      setReleaseSuccessCard(`${selectedCardsForBatch.length} thẻ`); // Reuse success modal
+    } catch (err) {
+      console.error(err);
+      setBatchReleaseError('Lỗi khi trả một số thẻ. Vui lòng thử lại.');
+    } finally {
+      setBatchReleaseLoading(false);
+    }
+  };
+
   const handleToggleLock = async (card: Card) => {
     const newStatus = card.status === 'khóa' ? 'trống' : 'khóa';
     try {
@@ -466,7 +523,7 @@ export default function PosTablesPage() {
         </div>
       )}
 
-      {/* Search Box */}
+      {/* Search Box & Actions */}
       <div className="tables-search-row">
         <div className="tables-search-container">
           <Search size={18} color="#a0a0a0" />
@@ -478,6 +535,29 @@ export default function PosTablesPage() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
+        <button 
+          className="btn-multi-select-toggle" 
+          onClick={() => {
+            setIsMultiSelectMode(!isMultiSelectMode);
+            setSelectedCardsForBatch([]);
+          }}
+          style={{
+            padding: '8px 16px',
+            borderRadius: '24px',
+            border: 'none',
+            backgroundColor: '#fff',
+            color: isMultiSelectMode ? '#C42326' : '#349409',
+            fontWeight: 700,
+            fontSize: '13px',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+            transition: 'all 0.2s'
+          }}
+        >
+          {isMultiSelectMode ? 'Hủy chọn' : 'Chọn nhiều'}
+        </button>
       </div>
 
       {/* Pill Filter Container */}
@@ -570,16 +650,30 @@ export default function PosTablesPage() {
                 <div 
                   key={uniqueKey} 
                   className={`table-card-box ${statusColor} ${activeSession ? 'clickable' : ''}`}
-                  onClick={() => {
+                  onClick={(e) => {
+                    if (isMultiSelectMode) {
+                      if (activeSession) toggleCardSelection(card.cardNumber);
+                      return;
+                    }
                     if (activeSession) {
                       setSelectedSessionForDetail(activeSession);
                     }
                   }}
-                  style={activeSession ? { cursor: 'pointer' } : {}}
+                  style={(activeSession || isMultiSelectMode) ? { cursor: 'pointer' } : {}}
                 >
                   {/* Card Header Section */}
                   <div className="table-card-header">
-                    <span className="table-card-number">#{card.cardNumber}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {isMultiSelectMode && activeSession && (
+                        <input 
+                          type="checkbox" 
+                          checked={selectedCardsForBatch.includes(card.cardNumber)}
+                          onChange={() => {}} // Handle on parent div
+                          style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#256e05' }}
+                        />
+                      )}
+                      <span className="table-card-number">#{card.cardNumber}</span>
+                    </div>
                     <span className="table-card-badge-tag">
                       {statusColor === 'overdue' && <AlertTriangle size={10} style={{ marginRight: '2px', display: 'inline', verticalAlign: 'middle' }} />}
                       {badgeText}
@@ -907,6 +1001,74 @@ export default function PosTablesPage() {
             >
               ĐÓNG
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Action Button for Batch Release */}
+      {isMultiSelectMode && selectedCardsForBatch.length > 0 && (
+        <div style={{
+          position: 'fixed',
+          bottom: '110px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 100,
+        }}>
+          <button 
+            onClick={() => setIsBatchReleaseModalOpen(true)}
+            style={{
+              backgroundColor: '#256e05',
+              color: '#fff',
+              border: 'none',
+              padding: '12px 24px', 
+              borderRadius: '24px',
+              fontWeight: 'bold',
+              fontSize: '14px', 
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(37, 110, 5, 0.4)'
+            }}
+          >
+            TRẢ {selectedCardsForBatch.length} THẺ
+          </button>
+        </div>
+      )}
+
+      {/* Confirm Batch Release Popup */}
+      {isBatchReleaseModalOpen && (
+        <div className="tables-modal-overlay" onClick={() => !batchReleaseLoading && setIsBatchReleaseModalOpen(false)}>
+          <div className="tables-confirm-box" onClick={e => e.stopPropagation()} style={{ width: '400px' }}>
+            <h3 className="tables-confirm-title">Xác nhận trả nhiều thẻ</h3>
+            <p className="tables-confirm-message" style={{ textAlign: 'left', marginBottom: '8px' }}>
+              Bạn chuẩn bị trả <strong style={{ color: '#349409' }}>{selectedCardsForBatch.length}</strong> thẻ sau:
+            </p>
+            <div style={{ maxHeight: '150px', overflowY: 'auto', marginBottom: '16px', padding: '10px', backgroundColor: '#f9f9f9', borderRadius: '8px', border: '1px solid #eee' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {selectedCardsForBatch.map(num => (
+                  <span key={num} style={{ padding: '4px 10px', backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '4px', fontWeight: 'bold' }}>
+                    #{num}
+                  </span>
+                ))}
+              </div>
+            </div>
+            {batchReleaseError && (
+              <p style={{ color: '#d32f2f', fontSize: '13px', textAlign: 'center', margin: '0 0 12px 0' }}>{batchReleaseError}</p>
+            )}
+            <div className="tables-confirm-actions">
+              <button
+                className="tables-confirm-cancel"
+                onClick={() => setIsBatchReleaseModalOpen(false)}
+                disabled={batchReleaseLoading}
+              >
+                HỦY
+              </button>
+              <button
+                className="tables-confirm-ok"
+                onClick={handleBatchReleaseConfirmed}
+                disabled={batchReleaseLoading}
+              >
+                {batchReleaseLoading ? 'Đang xử lý...' : 'XÁC NHẬN'}
+              </button>
+            </div>
           </div>
         </div>
       )}
