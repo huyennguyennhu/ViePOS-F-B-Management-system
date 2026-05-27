@@ -49,7 +49,7 @@ Research:
 
 ## Execution Notes
 
-Last updated: 2026-05-27.
+Last updated: 2026-05-28.
 
 - Phase 1 code-side containment is complete and pushed:
   - `1b778d2 fix(security): remove unsafe secret defaults`
@@ -60,6 +60,8 @@ Last updated: 2026-05-27.
 - Phase 2 code is implemented and reviewed. Backend route matrix and elevated-target guard tests pass in `cd backend && bash ./mvnw test`.
 - Phase 2 fixed source: `SecurityConfig` now uses explicit allowlists plus deny-by-default fallback; `StaffController` blocks ADMIN from creating/promoting/editing/deleting ADMIN or ROOT_ADMIN targets.
 - Phase 3 code is implemented and reviewed. Account/PIN request safety tests pass; frontend forgot-PIN no longer submits logged-out reset data.
+- Phase 4 code is implemented and reviewed. Checkout prices, totals, and payment rows are now server-owned for takeaway, append-items, and card session checkout paths.
+- Phase 4 fixed source: `OrderCheckoutService` resolves prices through `ProductPriceService`, `CheckoutPaymentValidationService` rejects mismatched tender before touched write paths, and card session duration aliases reuse checkout service-type normalization.
 
 ## Phases
 
@@ -68,7 +70,7 @@ Last updated: 2026-05-27.
 | 1 | [Incident Containment](./phase-01-incident-containment.md) | Completed |
 | 2 | [Authorization Boundary](./phase-02-authorization-boundary.md) | Completed |
 | 3 | [Account Request and PIN Safety](./phase-03-account-request-and-pin-safety.md) | Completed |
-| 4 | [Checkout Total Ownership](./phase-04-checkout-total-ownership.md) | Pending |
+| 4 | [Checkout Total Ownership](./phase-04-checkout-total-ownership.md) | Completed |
 | 5 | [Inventory and Session Consistency](./phase-05-inventory-and-session-consistency.md) | Pending |
 | 6 | [Data Exposure and API Contracts](./phase-06-data-exposure-and-api-contracts.md) | Pending |
 | 7 | [Regression Verification](./phase-07-regression-verification.md) | Pending |
@@ -134,6 +136,29 @@ Last updated: 2026-05-27.
 - Code review: code-reviewer re-review found no blocking issues after locked request transitions, marker-based role mapping, and admin-registration reject guard were added.
 - Regression coverage includes display-name role smuggling, server-controlled admin request marker, logged-out forgot-PIN rejection, authenticated PIN change binding, wrong PIN request type rejection, and pending request row locking.
 
+## Phase 4 Implementation Notes
+
+- Test-first scope:
+  - tampered `item.price` cannot change persisted unit price or total,
+  - `paymentAmount` below server total returns 400,
+  - transfer/non-cash overpay or mismatch returns 400,
+  - cash `cashReceived` greater than server total succeeds while payment amount remains server total,
+  - append-items increases total exactly once,
+  - append-items payment amount equals server-calculated addon subtotal.
+- Keep compatibility for existing service type names: `TAKEAWAY`, `FOUR_HOURS`, `PACKAGE_4H`, `FULL_DAY`, `FULLTIME`.
+- Do not add payment refund/void schema in Phase 4. Preserve the existing payment model and fix amount ownership only.
+- Prefer a small checkout payment validation helper over duplicating mismatch logic in both order and card controllers.
+- Code-review gate for Phase 4 must specifically inspect price-source ownership, append total math, and cash-vs-payment amount semantics before committing.
+
+## Phase 4 Evidence
+
+- Backend tests: `cd backend && bash ./mvnw test` passed 37 tests, 0 failures/errors.
+- Code review:
+  - First review found one blocking service-type alias gap; fixed and retested.
+  - Re-review found one medium card-session duration alias gap; fixed and retested.
+  - Final narrow re-review found no blocking/important findings.
+- Regression coverage includes tampered item price, transfer under/over mismatch, cash over/under tender, append total double-count prevention, append addon payment amount, card session underpay pre-write rejection, and service-type alias compatibility.
+
 ## Global Validation Gates
 
 - [x] Backend tests cover STAFF/ADMIN/ROOT_ADMIN route matrix.
@@ -141,8 +166,8 @@ Last updated: 2026-05-27.
 - [x] Backend tests cover admin smuggling and PIN reset takeover regressions.
 - [x] Backend tests cover unauthenticated forgot-PIN rejection and authenticated PIN change binding.
 - [ ] Backend config tests cover non-local fail-fast secrets and safe local profile startup.
-- [ ] Backend tests cover checkout server-side pricing and append total.
-- [ ] Backend tests cover payment mismatch, cash over-tender, and append addon payment amount.
+- [x] Backend tests cover checkout server-side pricing and append total.
+- [x] Backend tests cover payment mismatch, cash over-tender, and append addon payment amount.
 - [ ] Backend tests cover inventory export enum, negative stock rejection, and session double-book guard.
 - [ ] Frontend build/type-check passes after API wrapper changes.
 - [ ] No stack traces or raw secrets in API responses or docs/config.
