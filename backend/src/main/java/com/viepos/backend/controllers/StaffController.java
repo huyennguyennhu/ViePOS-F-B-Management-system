@@ -22,6 +22,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -33,6 +34,8 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/staff")
 @CrossOrigin(origins = "*", allowedHeaders = "*")
 public class StaffController {
+
+    private static final String ADMIN_REQUEST_PREFIX = "ADMIN_REQ";
 
     @Autowired
     private UserRepository userRepository;
@@ -108,11 +111,10 @@ public class StaffController {
     private Map<String, Object> mapRequestToOldStruct(AccountRequest req, String status) {
         Map<String, Object> map = new HashMap<>();
         String fullName = req.getRequestFullName() != null ? req.getRequestFullName() : (req.getEmployee() != null ? req.getEmployee().getFullName() : "");
-        String roleStr = "STAFF";
-        if (fullName.endsWith(" [ADMIN]")) {
-            fullName = fullName.substring(0, fullName.length() - 8).trim();
-            roleStr = "ADMIN";
-        }
+        String roleStr = req.getRequestType() == RequestType.REGISTER
+                ? requestedRegisterRole(req).name()
+                : "STAFF";
+        fullName = stripLegacyRoleSuffix(fullName);
         
         map.put("id", req.getId().toString());
         map.put("name", fullName);
@@ -159,8 +161,27 @@ public class StaffController {
     }
 
     private static EmployeeRole requestedRegisterRole(AccountRequest req) {
-        String fullName = req.getRequestFullName();
-        return fullName != null && fullName.endsWith(" [ADMIN]") ? EmployeeRole.ADMIN : EmployeeRole.STAFF;
+        String requestCode = req.getRequestCode();
+        return requestCode != null && requestCode.startsWith(ADMIN_REQUEST_PREFIX)
+                ? EmployeeRole.ADMIN
+                : EmployeeRole.STAFF;
+    }
+
+    private static String stripLegacyRoleSuffix(String fullName) {
+        if (fullName == null) {
+            return null;
+        }
+        return fullName
+                .replaceAll("\\s*\\[(ADMIN|ROOT_ADMIN)]\\s*$", "")
+                .trim();
+    }
+
+    private ResponseEntity<?> unavailableRequestResponse(UUID id, RequestType expectedType) {
+        Optional<AccountRequest> existing = requestRepository.findById(id);
+        if (existing.isEmpty() || existing.get().getRequestType() != expectedType) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.status(400).body(Map.of("message", "Yêu cầu này đã được xử lý."));
     }
 
     @PostMapping("/register")
@@ -186,7 +207,7 @@ public class StaffController {
         AccountRequest req = new AccountRequest();
         req.setRequestCode("REQ" + System.currentTimeMillis());
         req.setRequestType(RequestType.REGISTER);
-        req.setRequestFullName(name);
+        req.setRequestFullName(stripLegacyRoleSuffix(name));
         req.setRequestEmail(email);
         req.setRequestPhone(phone);
         req.setRequestPinHash(passwordEncoder.encode(pin));
@@ -203,13 +224,12 @@ public class StaffController {
     }
 
     @PutMapping("/{id}/approve")
+    @Transactional
     public ResponseEntity<?> approveStaff(@PathVariable String id) {
-        Optional<AccountRequest> reqOpt = requestRepository.findById(UUID.fromString(id));
-        if (reqOpt.isPresent() && reqOpt.get().getRequestType() == RequestType.REGISTER) {
+        UUID requestId = UUID.fromString(id);
+        Optional<AccountRequest> reqOpt = requestRepository.findByIdAndRequestTypeAndStatus(requestId, RequestType.REGISTER, RequestStatus.PENDING);
+        if (reqOpt.isPresent()) {
             AccountRequest req = reqOpt.get();
-            if (req.getStatus() != RequestStatus.PENDING) {
-                return ResponseEntity.status(400).body(Map.of("message", "Yêu cầu này đã được xử lý."));
-            }
             User currentUser = getCurrentUser();
             EmployeeRole newRole = requestedRegisterRole(req);
             if (isElevatedRole(newRole) && !currentUserIsRootAdmin()) {
@@ -234,10 +254,7 @@ public class StaffController {
             req.setApprovedAt(LocalDateTime.now());
             requestRepository.save(req);
 
-            String fullName = req.getRequestFullName();
-            if (fullName != null && fullName.endsWith(" [ADMIN]")) {
-                fullName = fullName.substring(0, fullName.length() - 8).trim();
-            }
+            String fullName = stripLegacyRoleSuffix(req.getRequestFullName());
 
             Employee emp = new Employee();
             emp.setEmployeeId("EMP" + System.currentTimeMillis());
@@ -260,18 +277,21 @@ public class StaffController {
 
             return ResponseEntity.ok(Map.of("message", "Staff account approved. Email sent."));
         }
-        return ResponseEntity.notFound().build();
+        return unavailableRequestResponse(requestId, RequestType.REGISTER);
     }
     
     @PutMapping("/{id}/reject")
+    @Transactional
     public ResponseEntity<?> rejectStaff(@PathVariable String id) {
-        Optional<AccountRequest> reqOpt = requestRepository.findById(UUID.fromString(id));
-        if (reqOpt.isPresent() && reqOpt.get().getRequestType() == RequestType.REGISTER) {
+        UUID requestId = UUID.fromString(id);
+        Optional<AccountRequest> reqOpt = requestRepository.findByIdAndRequestTypeAndStatus(requestId, RequestType.REGISTER, RequestStatus.PENDING);
+        if (reqOpt.isPresent()) {
             AccountRequest req = reqOpt.get();
-            if (req.getStatus() != RequestStatus.PENDING) {
-                return ResponseEntity.status(400).body(Map.of("message", "Yêu cầu này đã được xử lý."));
-            }
             User currentUser = getCurrentUser();
+            EmployeeRole requestedRole = requestedRegisterRole(req);
+            if (isElevatedRole(requestedRole) && !currentUserIsRootAdmin()) {
+                return ResponseEntity.status(403).body(Map.of("message", "Chỉ Root Admin được từ chối yêu cầu tạo tài khoản Quản lý."));
+            }
             if (currentUser != null && currentUser.getEmployee() != null) {
                 if (currentUser.getEmployee().getRole() == EmployeeRole.ADMIN) {
                     if (req.getEmployee() != null && (req.getEmployee().getRole() == EmployeeRole.ADMIN || req.getEmployee().getRole() == EmployeeRole.ROOT_ADMIN)) {
@@ -288,7 +308,7 @@ public class StaffController {
             }
             return ResponseEntity.ok(Map.of("message", "Staff account rejected."));
         }
-        return ResponseEntity.notFound().build();
+        return unavailableRequestResponse(requestId, RequestType.REGISTER);
     }
 
     @PostMapping("/login")
@@ -361,6 +381,14 @@ public class StaffController {
         String oldPin = request.get("oldPin");
         String newPin = request.get("newPin");
 
+        User currentUser = getCurrentUser();
+        if (currentUser == null || currentUser.getEmployee() == null) {
+            return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Vui lòng đăng nhập để đổi mã PIN."));
+        }
+        if (email == null || !email.equalsIgnoreCase(currentUser.getEmail())) {
+            return ResponseEntity.status(403).body(Map.of("ok", false, "message", "Bạn chỉ được yêu cầu đổi mã PIN cho chính tài khoản đang đăng nhập."));
+        }
+
         Optional<User> userOpt = userRepository.findByEmail(email);
         if (userOpt.isEmpty()) return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Tài khoản không tồn tại."));
         if (userOpt.get().getEmployee() != null && userOpt.get().getEmployee().getStatus() != EmployeeStatus.ACTIVE) {
@@ -385,23 +413,7 @@ public class StaffController {
 
     @PostMapping("/forgot-pin")
     public ResponseEntity<?> requestForgotPin(@RequestBody Map<String, String> request) {
-        String email = request.get("email");
-        String newPin = request.get("newPin");
-
-        Optional<User> userOpt = userRepository.findByEmail(email);
-        if (userOpt.isEmpty()) return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Email không tồn tại trong hệ thống."));
-        if (userOpt.get().getEmployee() != null && userOpt.get().getEmployee().getStatus() != EmployeeStatus.ACTIVE) {
-            return ResponseEntity.status(401).body(Map.of("ok", false, "message", "Tài khoản của bạn đã bị vô hiệu hóa hoặc nghỉ việc."));
-        }
-
-        AccountRequest req = new AccountRequest();
-        req.setRequestCode("REQ" + System.currentTimeMillis());
-        req.setRequestType(RequestType.RESET_PIN);
-        req.setEmployee(userOpt.get().getEmployee());
-        req.setRequestPinHash(passwordEncoder.encode(newPin));
-        requestRepository.save(req);
-
-        return ResponseEntity.ok(Map.of("ok", true, "message", "Yêu cầu cấp lại mã PIN đã được gửi thành công."));
+        return ResponseEntity.status(410).body(Map.of("ok", false, "message", "Vui lòng liên hệ quản lý để được cấp lại mã PIN."));
     }
 
     @GetMapping("/all")
@@ -433,13 +445,16 @@ public class StaffController {
     }
 
     @PutMapping("/pin-change-requests/{id}/approve")
+    @Transactional
     public ResponseEntity<?> approvePinRequest(@PathVariable String id) {
-        Optional<AccountRequest> reqOpt = requestRepository.findById(UUID.fromString(id));
+        return approvePinRequest(id, RequestType.CHANGE_PIN);
+    }
+
+    private ResponseEntity<?> approvePinRequest(String id, RequestType expectedType) {
+        UUID requestId = UUID.fromString(id);
+        Optional<AccountRequest> reqOpt = requestRepository.findByIdAndRequestTypeAndStatus(requestId, expectedType, RequestStatus.PENDING);
         if (reqOpt.isPresent()) {
             AccountRequest req = reqOpt.get();
-            if (req.getStatus() != RequestStatus.PENDING) {
-                return ResponseEntity.status(400).body(Map.of("message", "Yêu cầu này đã được xử lý."));
-            }
             User currentUser = getCurrentUser();
             if (currentUser != null && currentUser.getEmployee() != null) {
                 if (currentUser.getEmployee().getRole() == EmployeeRole.ADMIN) {
@@ -462,17 +477,20 @@ public class StaffController {
             }
             return ResponseEntity.ok(Map.of("message", "Đã duyệt yêu cầu đổi mã PIN."));
         }
-        return ResponseEntity.notFound().build();
+        return unavailablePinRequestResponse(requestId, expectedType);
     }
 
     @PutMapping("/pin-change-requests/{id}/reject")
+    @Transactional
     public ResponseEntity<?> rejectPinRequest(@PathVariable String id) {
-        Optional<AccountRequest> reqOpt = requestRepository.findById(UUID.fromString(id));
+        return rejectPinRequest(id, RequestType.CHANGE_PIN);
+    }
+
+    private ResponseEntity<?> rejectPinRequest(String id, RequestType expectedType) {
+        UUID requestId = UUID.fromString(id);
+        Optional<AccountRequest> reqOpt = requestRepository.findByIdAndRequestTypeAndStatus(requestId, expectedType, RequestStatus.PENDING);
         if (reqOpt.isPresent()) {
             AccountRequest req = reqOpt.get();
-            if (req.getStatus() != RequestStatus.PENDING) {
-                return ResponseEntity.status(400).body(Map.of("message", "Yêu cầu này đã được xử lý."));
-            }
             User currentUser = getCurrentUser();
             if (currentUser != null && currentUser.getEmployee() != null) {
                 if (currentUser.getEmployee().getRole() == EmployeeRole.ADMIN) {
@@ -490,7 +508,18 @@ public class StaffController {
             }
             return ResponseEntity.ok(Map.of("message", "Đã từ chối yêu cầu."));
         }
-        return ResponseEntity.notFound().build();
+        return unavailablePinRequestResponse(requestId, expectedType);
+    }
+
+    private ResponseEntity<?> unavailablePinRequestResponse(UUID id, RequestType expectedType) {
+        Optional<AccountRequest> existing = requestRepository.findById(id);
+        if (existing.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        if (existing.get().getRequestType() != expectedType) {
+            return ResponseEntity.status(400).body(Map.of("message", "Loại yêu cầu không hợp lệ cho thao tác này."));
+        }
+        return ResponseEntity.status(400).body(Map.of("message", "Yêu cầu này đã được xử lý."));
     }
 
     @GetMapping("/pin-reset-requests/pending")
@@ -507,13 +536,15 @@ public class StaffController {
     }
 
     @PutMapping("/pin-reset-requests/{id}/approve")
+    @Transactional
     public ResponseEntity<?> approvePinReset(@PathVariable String id) {
-        return approvePinRequest(id); // Same logic
+        return approvePinRequest(id, RequestType.RESET_PIN);
     }
 
     @PutMapping("/pin-reset-requests/{id}/reject")
+    @Transactional
     public ResponseEntity<?> rejectPinReset(@PathVariable String id) {
-        return rejectPinRequest(id); // Same logic
+        return rejectPinRequest(id, RequestType.RESET_PIN);
     }
 
     /** Create a new staff account directly (admin action, skips approval flow) */

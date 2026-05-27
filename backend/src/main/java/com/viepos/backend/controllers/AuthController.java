@@ -29,6 +29,8 @@ import java.util.Optional;
 @CrossOrigin(origins = "*", allowedHeaders = "*")
 public class AuthController {
 
+    private static final String ADMIN_REQUEST_PREFIX = "ADMIN_REQ";
+
     @Autowired
     private AuthenticationManager authenticationManager;
 
@@ -65,9 +67,9 @@ public class AuthController {
         }
 
         AccountRequest req = new AccountRequest();
-        req.setRequestCode("REQ" + System.currentTimeMillis());
+        req.setRequestCode(ADMIN_REQUEST_PREFIX + System.currentTimeMillis());
         req.setRequestType(RequestType.REGISTER);
-        req.setRequestFullName(name + " [ADMIN]");
+        req.setRequestFullName(stripLegacyRoleSuffix(name));
         req.setRequestEmail(email);
         req.setRequestPhone(phone);
         req.setRequestPinHash(passwordEncoder.encode(password));
@@ -137,5 +139,14 @@ public class AuthController {
         response.put("name", user.getEmployee().getFullName());
         response.put("id", user.getId().toString());
         return ResponseEntity.ok(response);
+    }
+
+    private static String stripLegacyRoleSuffix(String fullName) {
+        if (fullName == null) {
+            return null;
+        }
+        return fullName
+                .replaceAll("\\s*\\[(ADMIN|ROOT_ADMIN)]\\s*$", "")
+                .trim();
     }
 }

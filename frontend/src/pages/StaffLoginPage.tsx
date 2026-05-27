@@ -16,10 +16,6 @@ export default function StaffLoginPage() {
 
   // Forgot PIN state
   const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotPin, setForgotPin] = useState('');
-  const [forgotSubmitting, setForgotSubmitting] = useState(false);
-  const [forgotMessage, setForgotMessage] = useState('');
 
   const handleTogglePin = () => {
     setShowPin(true);
@@ -130,35 +126,6 @@ export default function StaffLoginPage() {
       }
     }
   };
-  const handleForgotSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setForgotMessage('');
-    
-    if (!validateEmail(forgotEmail)) {
-      setForgotMessage('Email không hợp lệ.');
-      return;
-    }
-    if (forgotPin.length !== 6 || !/^\d+$/.test(forgotPin)) {
-      setForgotMessage('Mã PIN mới phải gồm đúng 6 chữ số.');
-      return;
-    }
-
-    try {
-      setForgotSubmitting(true);
-      const res = await authAPI.forgotPin({ email: forgotEmail, newPin: forgotPin });
-      setForgotMessage(res.data.message || 'Gửi yêu cầu thành công!');
-      setTimeout(() => {
-        setIsForgotModalOpen(false);
-        setForgotMessage('');
-        setForgotEmail('');
-        setForgotPin('');
-      }, 3000);
-    } catch (err: any) {
-      setForgotMessage(err.response?.data?.message || 'Có lỗi xảy ra.');
-    } finally {
-      setForgotSubmitting(false);
-    }
-  };
   return (
     <div className="staff-login-container">
       <div className="staff-login-card">
@@ -265,48 +232,11 @@ export default function StaffLoginPage() {
               <div style={{
                 backgroundColor: 'white', padding: '24px', borderRadius: '12px', width: '90%', maxWidth: '400px', display: 'flex', flexDirection: 'column'
               }}>
-                <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#111' }}>Yêu Cầu Cấp Lại Mã PIN</h3>
-                
-                <form onSubmit={handleForgotSubmit} style={{ flex: '1 1 0%', display: 'flex', flexDirection: 'column' }}>
-                  <div className="staff-form-group">
-                    <label>Email của bạn</label>
-                    <input 
-                      type="email" 
-                      className="staff-modal-input"
-                      placeholder="abc@gmail.com"
-                      value={forgotEmail}
-                      onChange={e => setForgotEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="staff-form-group" style={{ flex: 1 }}>
-                    <label>Mã PIN Mới (6 số)</label>
-                    <input 
-                      type="password" 
-                      maxLength={6}
-                      className="staff-modal-input"
-                      style={{ letterSpacing: '8px', fontFamily: 'monospace' }}
-                      placeholder="••••••"
-                      value={forgotPin}
-                      onChange={e => setForgotPin(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  {forgotMessage && (
-                    <div style={{ marginBottom: '16px', padding: '10px', backgroundColor: forgotMessage.includes('thành công') ? '#d4edda' : '#f8d7da', color: forgotMessage.includes('thành công') ? '#155724' : '#721c24', borderRadius: '6px', fontSize: '13px' }}>
-                      {forgotMessage}
-                    </div>
-                  )}
-
-                  <div style={{ display: 'flex', gap: '10px', marginTop: 'auto' }}>
-                    <button type="button" onClick={() => setIsForgotModalOpen(false)} style={{ flex: 1, padding: '12px', backgroundColor: '#f1f1f1', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>Huỷ</button>
-                    <button type="submit" disabled={forgotSubmitting} style={{ flex: 1, padding: '12px', backgroundColor: '#256E05', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>
-                      {forgotSubmitting ? 'Đang gửi...' : 'Gửi Yêu Cầu'}
-                    </button>
-                  </div>
-                </form>
+                <h3 style={{ marginTop: 0, marginBottom: '12px', color: '#111' }}>Cấp Lại Mã PIN</h3>
+                <p style={{ margin: '0 0 24px', color: '#555', lineHeight: 1.5, fontSize: '14px' }}>
+                  Vui lòng liên hệ quản lý ca để xác minh và cấp lại mã PIN.
+                </p>
+                <button type="button" onClick={() => setIsForgotModalOpen(false)} style={{ padding: '12px', backgroundColor: '#256E05', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>Đã hiểu</button>
               </div>
             </div>
           )}
