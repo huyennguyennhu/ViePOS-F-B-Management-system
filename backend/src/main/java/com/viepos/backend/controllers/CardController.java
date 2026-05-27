@@ -86,7 +86,7 @@ public class CardController {
             return ResponseEntity.badRequest().body(Map.of("message", "Thiếu cardNumber hoặc orderId"));
         }
 
-        Optional<ServiceCard> cardOpt = cardRepository.findByCardCode(cardNumber);
+        Optional<ServiceCard> cardOpt = cardRepository.findByCardCodeForUpdate(cardNumber);
         if (cardOpt.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "Không tìm thấy thẻ có số " + cardNumber));
         }
@@ -94,6 +94,9 @@ public class CardController {
         ServiceCard card = cardOpt.get();
         if (card.getStatus() != CardStatus.AVAILABLE) {
             return ResponseEntity.badRequest().body(Map.of("message", "Thẻ này không trống. Trạng thái hiện tại: " + card.getStatus()));
+        }
+        if (sessionRepository.existsByCard_IdAndStatus(card.getId(), SessionStatus.ACTIVE)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Thẻ này đang có phiên hoạt động"));
         }
 
         List<?> itemsObj = payload.get("items") instanceof List<?> list ? list : null;

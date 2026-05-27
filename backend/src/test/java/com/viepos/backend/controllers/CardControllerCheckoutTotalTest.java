@@ -117,7 +117,7 @@ class CardControllerCheckoutTotalTest {
         card.setId(UUID.randomUUID());
         card.setCardCode("CARD-1");
         card.setStatus(CardStatus.AVAILABLE);
-        when(cardRepository.findByCardCode("CARD-1")).thenReturn(Optional.of(card));
+        when(cardRepository.findByCardCodeForUpdate("CARD-1")).thenReturn(Optional.of(card));
 
         product = product(new BigDecimal("60000"), new BigDecimal("90000"), new BigDecimal("120000"));
         when(productRepository.findById(product.getId())).thenReturn(Optional.of(product));

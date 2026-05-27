@@ -9,6 +9,7 @@ import com.viepos.backend.repositories.PaymentRepository;
 import com.viepos.backend.repositories.UserRepository;
 import com.viepos.backend.services.AuditLogService;
 import com.viepos.backend.services.CheckoutPaymentValidationService;
+import com.viepos.backend.services.OrderCancellationService;
 import com.viepos.backend.services.OrderCheckoutService;
 import com.viepos.backend.services.OrderReadService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +44,9 @@ public class OrderController {
 
     @Autowired
     private OrderCheckoutService orderCheckoutService;
+
+    @Autowired
+    private OrderCancellationService orderCancellationService;
 
     @Autowired
     private CheckoutPaymentValidationService paymentValidationService;
@@ -131,7 +135,7 @@ public class OrderController {
     @PutMapping("/{id}/status")
     @Transactional
     public ResponseEntity<?> updateOrderStatus(@PathVariable UUID id, @RequestBody Map<String, String> body) {
-        Optional<Order> orderOpt = orderRepository.findById(id);
+        Optional<Order> orderOpt = orderRepository.findByIdForUpdate(id);
         if (orderOpt.isEmpty()) {
             return ResponseEntity.status(404).body(Map.of("message", "Không tìm thấy đơn hàng"));
         }
@@ -142,13 +146,22 @@ public class OrderController {
         Order order = orderOpt.get();
         try {
             OrderStatus newStatus = OrderStatus.valueOf(statusStr.trim().toUpperCase());
+            if (newStatus == OrderStatus.CANCELLED) {
+                String note = body.get("note");
+                if (note == null || note.isBlank()) {
+                    return ResponseEntity.badRequest().body(Map.of("message", "Vui lòng nhập lý do hủy đơn"));
+                }
+                Order cancelled = orderCancellationService.cancelOrder(order, note, resolveCurrentUser());
+                return ResponseEntity.ok(Map.of(
+                        "message", "Đã cập nhật trạng thái đơn hàng",
+                        "id", cancelled.getId(),
+                        "status", cancelled.getStatus().name(),
+                        "note", cancelled.getNote() != null ? cancelled.getNote() : ""
+                ));
+            }
             order.setStatus(newStatus);
             if (body.containsKey("note")) {
                 order.setNote(body.get("note"));
-            }
-            if (newStatus == OrderStatus.CANCELLED
-                    && (order.getNote() == null || order.getNote().isBlank())) {
-                return ResponseEntity.badRequest().body(Map.of("message", "Vui lòng nhập lý do hủy đơn"));
             }
             orderRepository.save(order);
             return ResponseEntity.ok(Map.of(

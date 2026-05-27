@@ -2,9 +2,11 @@ package com.viepos.backend.repositories;
 
 import com.viepos.backend.models.Order;
 import com.viepos.backend.models.enums.OrderStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -19,6 +21,11 @@ import java.util.UUID;
 @Repository
 public interface OrderRepository extends JpaRepository<Order, UUID> {
     Optional<Order> findByOrderCode(String orderCode);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Order o LEFT JOIN FETCH o.session sess LEFT JOIN FETCH sess.card WHERE o.id = :id")
+    Optional<Order> findByIdForUpdate(@Param("id") UUID id);
+
     List<Order> findByStatusOrderByCreatedAtDesc(OrderStatus status);
     List<Order> findBySession_Id(UUID sessionId);
     List<Order> findByCreatedAtBetweenOrderByCreatedAtDesc(LocalDateTime startDate, LocalDateTime endDate);

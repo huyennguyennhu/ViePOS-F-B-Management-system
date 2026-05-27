@@ -13,6 +13,7 @@ import java.util.UUID;
 public interface ServiceSessionRepository extends JpaRepository<ServiceSession, UUID> {
     Optional<ServiceSession> findBySessionCode(String sessionCode);
     Optional<ServiceSession> findByCard_IdAndStatus(UUID cardId, SessionStatus status);
+    boolean existsByCard_IdAndStatus(UUID cardId, SessionStatus status);
     List<ServiceSession> findByStatusOrderByStartedAtDesc(SessionStatus status);
 
     @org.springframework.data.jpa.repository.Query("SELECT MIN(s.startedAt) FROM ServiceSession s")
