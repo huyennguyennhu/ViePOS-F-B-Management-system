@@ -1,15 +1,24 @@
 ---
-title: "Security Data Integrity Fix Plan"
-description: "Fix critical ViePOS security, authorization, checkout, inventory, and data exposure bugs with tests-first phases."
+title: Security Data Integrity Fix Plan
+description: >-
+  Fix critical ViePOS security, authorization, checkout, inventory, and data
+  exposure bugs with tests-first phases.
 status: pending
 priority: P1
-effort: "5d"
-branch: "main"
-tags: [bugfix, backend, frontend, auth, security, data-integrity, tdd]
+effort: 5d
+branch: main
+tags:
+  - bugfix
+  - backend
+  - frontend
+  - auth
+  - security
+  - data-integrity
+  - tdd
 blockedBy: []
 blocks: []
-created: "2026-05-27T10:57:22.029Z"
-createdBy: "ck:plan"
+created: '2026-05-27T10:57:22.029Z'
+createdBy: 'ck:plan'
 source: skill
 ---
 
@@ -42,7 +51,7 @@ Research:
 
 | Phase | Name | Status |
 |-------|------|--------|
-| 1 | [Incident Containment](./phase-01-incident-containment.md) | Pending |
+| 1 | [Incident Containment](./phase-01-incident-containment.md) | Completed |
 | 2 | [Authorization Boundary](./phase-02-authorization-boundary.md) | Pending |
 | 3 | [Account Request and PIN Safety](./phase-03-account-request-and-pin-safety.md) | Pending |
 | 4 | [Checkout Total Ownership](./phase-04-checkout-total-ownership.md) | Pending |

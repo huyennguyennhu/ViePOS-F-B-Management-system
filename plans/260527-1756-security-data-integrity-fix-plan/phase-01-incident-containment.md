@@ -1,9 +1,9 @@
 ---
 phase: 1
-title: "Incident Containment"
-status: pending
+title: Incident Containment
+status: completed
 priority: P1
-effort: "0.5d"
+effort: 0.5d
 dependencies: []
 ---
 
