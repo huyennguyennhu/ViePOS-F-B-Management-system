@@ -36,12 +36,14 @@ ViePOS-F-B-Management-system/
    ```yaml
    spring:
      datasource:
-       url: jdbc:postgresql://aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?prepareThreshold=0&sslmode=require
-       username: postgres.YOUR_PROJECT_REF
-       password: YOUR_SUPABASE_PASSWORD
+       url: YOUR_LOCAL_OR_SUPABASE_JDBC_URL
+       username: YOUR_DATABASE_USERNAME
+       password: YOUR_DATABASE_PASSWORD
    jwt:
      secret: YOUR_JWT_SECRET_MIN_32_CHARS
    ```
+
+   `application-local.yml` đã được ignore. Không commit database password, JWT secret, hoặc bootstrap admin credential.
 
 ### Bước 2: Chạy Backend (Spring Boot)
 
@@ -154,8 +156,18 @@ VITE_API_URL=https://viepos-f-b-management-system.onrender.com
 ```
 
 ### 2. Backend (Render Environment)
-Cần cấu hình 4 biến môi trường sau trong mục **Environment** trên Dashboard Render:
-- `SPRING_DATASOURCE_URL` = `jdbc:postgresql://aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?prepareThreshold=0&sslmode=require`
-- `SPRING_DATASOURCE_USERNAME` = `postgres.osnngwxnpfpbynbwfdnq`
-- `SPRING_DATASOURCE_PASSWORD` = `Hoilamcgi282111`
-- `JWT_SECRET` = `dcm0RjLIMaVBTQJprG7+qvIl5O6nIc/N2GH1nOLjPhAdkL/9rmmGOjjNl8/HcCV89+YO/WnUunpPV0G4Luke1g==`
+Cần cấu hình các biến môi trường sau trong mục **Environment** trên Dashboard Render. Dùng giá trị thật trong dashboard, không ghi vào repo:
+- `SPRING_DATASOURCE_URL`
+- `SPRING_DATASOURCE_USERNAME`
+- `SPRING_DATASOURCE_PASSWORD`
+- `JWT_SECRET`
+
+Backend sẽ fail startup ở non-local profile nếu thiếu datasource hoặc JWT secret.
+
+Nếu cần bootstrap root admin cho môi trường local/bootstrap, bật tạm bằng env rồi tắt sau khi tạo xong:
+- `VIEPOS_BOOTSTRAP_ROOT_ENABLED=true`
+- `VIEPOS_BOOTSTRAP_ROOT_EMPLOYEE_ID`
+- `VIEPOS_BOOTSTRAP_ROOT_EMAIL`
+- `VIEPOS_BOOTSTRAP_ROOT_PASSWORD`
+- `VIEPOS_BOOTSTRAP_ROOT_FULL_NAME`
+- `VIEPOS_BOOTSTRAP_ROOT_PHONE`

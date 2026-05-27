@@ -3,6 +3,9 @@ name: Supabase Database Backup
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+permissions:
+  contents: read
+
 on:
   schedule:
     # Chạy vào 00:00 UTC mỗi ngày (tương đương 07:00 sáng giờ Việt Nam)
@@ -31,4 +34,4 @@ jobs:
         with:
           name: supabase-db-backup
           path: backup_*.dump
-          retention-days: 90 # GitHub sẽ tự động giữ file này trong 90 ngày
+          retention-days: 7 # Giảm thời gian giữ artifact backup để hạn chế phơi dữ liệu

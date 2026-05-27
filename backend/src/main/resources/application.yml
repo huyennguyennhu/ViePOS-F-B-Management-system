@@ -5,9 +5,9 @@ spring:
   application:
     name: viepos-backend
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?prepareThreshold=0&sslmode=require}
-    username: ${SPRING_DATASOURCE_USERNAME:postgres.osnngwxnpfpbynbwfdnq}
-    password: ${SPRING_DATASOURCE_PASSWORD:Hoilamcgi282111}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -20,7 +20,7 @@ spring:
           time_zone: Asia/Ho_Chi_Minh
 
 jwt:
-  secret: ${JWT_SECRET:a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6}
+  secret: ${JWT_SECRET}
   expiration: 86400000 # 1 day in ms
 
 store:

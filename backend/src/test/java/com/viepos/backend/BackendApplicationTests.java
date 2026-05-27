@@ -1,13 +1,22 @@
 package com.viepos.backend;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
+import java.util.TimeZone;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
 class BackendApplicationTests {
 
 	@Test
-	void contextLoads() {
+	void initSetsVietnamTimezone() {
+		TimeZone original = TimeZone.getDefault();
+		try {
+			new BackendApplication().init();
+			assertThat(TimeZone.getDefault().getID()).isEqualTo("Asia/Ho_Chi_Minh");
+		} finally {
+			TimeZone.setDefault(original);
+		}
 	}
 
 }

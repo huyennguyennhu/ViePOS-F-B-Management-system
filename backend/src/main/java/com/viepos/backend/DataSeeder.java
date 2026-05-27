@@ -5,10 +5,12 @@ import com.viepos.backend.models.enums.*;
 import com.viepos.backend.repositories.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.env.Environment;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 
 @Component
 public class DataSeeder implements CommandLineRunner {
@@ -31,25 +33,12 @@ public class DataSeeder implements CommandLineRunner {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private Environment environment;
+
     @Override
     public void run(String... args) throws Exception {
-        // Seed Employees & Users
-        if (!employeeRepository.existsByEmployeeId("EMP0001")) {
-            Employee rootAdmin = new Employee();
-            rootAdmin.setEmployeeId("EMP0001");
-            rootAdmin.setFullName("Nguyễn Thị L");
-            rootAdmin.setPersonalEmail("nguyennlt.ncc@gmail.com");
-            rootAdmin.setPhone("0901234567");
-            rootAdmin.setRole(EmployeeRole.ROOT_ADMIN);
-            rootAdmin.setStatus(EmployeeStatus.ACTIVE);
-            employeeRepository.save(rootAdmin);
-
-            User rootUser = new User();
-            rootUser.setEmployee(rootAdmin);
-            rootUser.setEmail("nguyennlt.ncc@gmail.com");
-            rootUser.setPassword(passwordEncoder.encode("Admin123!@#"));
-            userRepository.save(rootUser);
-        }
+        seedBootstrapRootAdmin();
 
         // Seed Categories
         if (categoryRepository.count() == 0) {
@@ -97,6 +86,54 @@ public class DataSeeder implements CommandLineRunner {
             }
         }
 
+    }
+
+    private void seedBootstrapRootAdmin() {
+        if (!isRootBootstrapEnabled()) {
+            return;
+        }
+
+        String employeeId = requiredBootstrapValue("VIEPOS_BOOTSTRAP_ROOT_EMPLOYEE_ID");
+        if (employeeRepository.existsByEmployeeId(employeeId)) {
+            return;
+        }
+
+        String email = requiredBootstrapValue("VIEPOS_BOOTSTRAP_ROOT_EMAIL");
+        String password = requiredBootstrapValue("VIEPOS_BOOTSTRAP_ROOT_PASSWORD");
+
+        Employee rootAdmin = new Employee();
+        rootAdmin.setEmployeeId(employeeId);
+        rootAdmin.setFullName(requiredBootstrapValue("VIEPOS_BOOTSTRAP_ROOT_FULL_NAME"));
+        rootAdmin.setPersonalEmail(email);
+        rootAdmin.setPhone(requiredBootstrapValue("VIEPOS_BOOTSTRAP_ROOT_PHONE"));
+        rootAdmin.setRole(EmployeeRole.ROOT_ADMIN);
+        rootAdmin.setStatus(EmployeeStatus.ACTIVE);
+        employeeRepository.save(rootAdmin);
+
+        User rootUser = new User();
+        rootUser.setEmployee(rootAdmin);
+        rootUser.setEmail(email);
+        rootUser.setPassword(passwordEncoder.encode(password));
+        userRepository.save(rootUser);
+    }
+
+    private boolean isRootBootstrapEnabled() {
+        if (!hasActiveProfile("local") && !hasActiveProfile("bootstrap")) {
+            return false;
+        }
+        return Boolean.parseBoolean(environment.getProperty("VIEPOS_BOOTSTRAP_ROOT_ENABLED", "false"));
+    }
+
+    private boolean hasActiveProfile(String profile) {
+        return Arrays.asList(environment.getActiveProfiles()).contains(profile);
+    }
+
+    private String requiredBootstrapValue(String key) {
+        String value = environment.getProperty(key);
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException("Missing required root bootstrap value: " + key);
+        }
+        return value;
     }
 
     private Product createProduct(String pCode, String sku, Category cat, String name, BigDecimal pt, BigDecimal p4, BigDecimal pf) {
