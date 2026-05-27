@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: Inventory and Session Consistency
-status: in-progress
+status: completed
 priority: P1
 effort: 1d
 dependencies:
@@ -52,8 +52,8 @@ Add inventory mutation guard with lock/conditional update. Add card/session guar
 
 - [x] Manual export works and records correct transaction type.
 - [x] Negative stock path is impossible through API.
-- [ ] Double-click/concurrent session start fails safely.
-- [ ] Cancelled orders no longer silently leave inconsistent inventory/session state.
+- [x] Double-click/concurrent session start fails safely.
+- [x] Cancelled orders no longer silently leave inconsistent inventory/session state.
 
 ## Issue #5 Evidence
 
@@ -64,6 +64,14 @@ Add inventory mutation guard with lock/conditional update. Add card/session guar
   - Final narrow re-review found no blocking findings.
 - Regression coverage includes lowercase `export` mapping to `EXPORT`, decrement greater than stock rejecting before writes, sale deduction rejecting before inventory transaction writes, and checkout preflight preserving 400 behavior for insufficient stock.
 - Operational note: existing databases need `database/000001-add-export-transaction-type.sql` applied before deploying code that writes `EXPORT`.
+
+## Issue #6 Evidence
+
+- Backend tests: `cd backend && bash ./mvnw test` passed 48 tests, 0 failures/errors.
+- Code review:
+  - First review found cancellation race without order row lock, rollback-only risk for blank cancel note, and duplicate active-session Optional failure; fixed with locked order lookup, controller pre-validation, and `existsByCard_IdAndStatus`.
+  - Final narrow re-review found no blocking findings.
+- Regression coverage includes duplicate active-session rejection before side effects, card row locking before session creation, cancellation using locked order lookup, blank-note rejection before transactional service, restock adjustment transaction/items, active session completion/card release, payment preservation, and idempotent already-cancelled behavior.
 
 ## Risk Assessment
 
