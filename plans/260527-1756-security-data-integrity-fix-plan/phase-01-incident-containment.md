@@ -39,24 +39,34 @@ Config validation policy:
 
 ## Implementation Steps
 
-1. Prerequisite Gate: Java JDK 17 must be available locally or backend tests must run in CI with linked evidence.
-2. Tests Before: add Spring context/config validation test proving non-local profile fails when datasource/JWT env is missing.
-3. Tests Before: add local-profile startup/config test proving the documented local path uses only dummy/ignored values.
-4. Remove DB password/JWT values from README and `application.yml`; document placeholders only.
-5. Add safe local profile path so `spring-boot:run -Dspring-boot.run.profiles=local` remains documented and usable.
-6. Add config validation so non-local startup fails when datasource/JWT secret is missing.
-7. Gate root admin seed behind local/bootstrap profile and env-provided one-time credentials.
-8. Reduce backup artifact exposure: explicit permissions, lower retention, or encrypted dump.
-9. Run secret scan on diff before commit.
+1. [x] Prerequisite Gate: Java JDK 17 must be available locally or backend tests must run in CI with linked evidence.
+2. [x] Tests Before: add Spring context/config validation test proving non-local profile fails when datasource/JWT env is missing.
+3. [x] Tests Before: add local-profile startup/config test proving the documented local path uses only dummy/ignored values.
+4. [x] Remove DB password/JWT values from README and `application.yml`; document placeholders only.
+5. [x] Add safe local profile path so `spring-boot:run -Dspring-boot.run.profiles=local` remains documented and usable.
+6. [x] Add config validation so non-local startup fails when datasource/JWT secret is missing.
+7. [x] Gate root admin seed behind local/bootstrap profile and env-provided one-time credentials.
+8. [x] Reduce backup artifact exposure: explicit permissions, lower retention, or encrypted dump.
+9. [x] Run secret scan on diff before commit.
+
+## Implementation Evidence
+
+- Local Java runtime installed: JDK 17.
+- Backend regression command passed: `cd backend && bash ./mvnw test`.
+- Commits pushed:
+  - `1b778d2 fix(security): remove unsafe secret defaults`
+  - `e1a58d1 docs(plan): mark incident containment complete`
+- GitHub issue #1 updated with code-side evidence: `https://github.com/huyennguyennhu/ViePOS-F-B-Management-system/issues/1#issuecomment-4556389833`
+- Code-side fix is complete. External incident response remains open: rotate Supabase password/JWT/root credentials and purge or invalidate exposed history.
 
 ## Success Criteria
 
-- [ ] No production-looking credential remains in README/config.
-- [ ] Normal production startup needs external env secrets.
-- [ ] Local development still has a documented non-secret startup path.
-- [ ] Seeder does not create a known root password in production profile.
-- [ ] Config validation tests pass with JDK 17 or CI evidence is linked.
-- [ ] Issue #1 can be updated with code-side fix status.
+- [x] No production-looking credential remains in README/config.
+- [x] Normal production startup needs external env secrets.
+- [x] Local development still has a documented non-secret startup path.
+- [x] Seeder does not create a known root password in production profile.
+- [x] Config validation tests pass with JDK 17 or CI evidence is linked.
+- [x] Issue #1 can be updated with code-side fix status.
 
 ## Risk Assessment
 

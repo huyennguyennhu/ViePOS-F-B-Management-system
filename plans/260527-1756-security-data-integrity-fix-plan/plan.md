@@ -47,12 +47,25 @@ Research:
 - Auth/security researcher recommends P0 secrets, P1 server RBAC, P2 request integrity, P3 error/export safety, P4 frontend contracts.
 - Order/inventory review findings already verified in issues #4-#6; no new architecture needed beyond service-level invariants and tests.
 
+## Execution Notes
+
+Last updated: 2026-05-27.
+
+- Phase 1 code-side containment is complete and pushed:
+  - `1b778d2 fix(security): remove unsafe secret defaults`
+  - `e1a58d1 docs(plan): mark incident containment complete`
+  - GitHub evidence: issue #1 comment `https://github.com/huyennguyennhu/ViePOS-F-B-Management-system/issues/1#issuecomment-4556389833`
+- Local Java gate is resolved with JDK 17 from Homebrew. Backend tests for Phase 1 passed via `cd backend && bash ./mvnw test`.
+- Phase 1 remains incident-open operationally until owner confirms Supabase/JWT/root credential rotation and exposed-history handling.
+- Phase 2 code is implemented and reviewed. Backend route matrix and elevated-target guard tests pass in `cd backend && bash ./mvnw test`.
+- Phase 2 fixed source: `SecurityConfig` now uses explicit allowlists plus deny-by-default fallback; `StaffController` blocks ADMIN from creating/promoting/editing/deleting ADMIN or ROOT_ADMIN targets.
+
 ## Phases
 
 | Phase | Name | Status |
 |-------|------|--------|
 | 1 | [Incident Containment](./phase-01-incident-containment.md) | Completed |
-| 2 | [Authorization Boundary](./phase-02-authorization-boundary.md) | Pending |
+| 2 | [Authorization Boundary](./phase-02-authorization-boundary.md) | Completed |
 | 3 | [Account Request and PIN Safety](./phase-03-account-request-and-pin-safety.md) | Pending |
 | 4 | [Checkout Total Ownership](./phase-04-checkout-total-ownership.md) | Pending |
 | 5 | [Inventory and Session Consistency](./phase-05-inventory-and-session-consistency.md) | Pending |
@@ -101,10 +114,22 @@ Research:
 - Do not leave `/api/**` fallback broad enough to grant unlisted management routes to STAFF.
 - Do not normalize checkout payment mismatch silently; reject inconsistent payment totals and keep cash tender separate.
 
+## Applied High Recommendations
+
+- Phase 1 fail-fast secret plan is implemented with concrete runtime validation and tests; Java 17 local gate is resolved.
+- Phase 2 must implement an explicit method/path route matrix before changing authorization policy.
+- Phase 3 policy is fixed: logged-out forgot-PIN is disabled in this plan; email-token recovery is deferred.
+
+## Phase 2 Evidence
+
+- Backend tests: `cd backend && bash ./mvnw test` passed 17 tests, 0 failures/errors.
+- Code review: code-reviewer re-review found no blocking issues after `/api/settings/data-range` was made ROOT_ADMIN-only and missing matrix rows were added.
+- Regression coverage includes STAFF management denials, ADMIN root-settings denial, ROOT_ADMIN settings access, unlisted `/api/**` fallback denial, and elevated target create/promote/edit/delete guards.
+
 ## Global Validation Gates
 
-- [ ] Backend tests cover STAFF/ADMIN/ROOT_ADMIN route matrix.
-- [ ] Backend tests prove unknown or unlisted management `/api/**` routes are not STAFF-accessible.
+- [x] Backend tests cover STAFF/ADMIN/ROOT_ADMIN route matrix.
+- [x] Backend tests prove unknown or unlisted management `/api/**` routes are not STAFF-accessible.
 - [ ] Backend tests cover admin smuggling and PIN reset takeover regressions.
 - [ ] Backend tests cover unauthenticated forgot-PIN rejection and authenticated PIN change binding.
 - [ ] Backend config tests cover non-local fail-fast secrets and safe local profile startup.
