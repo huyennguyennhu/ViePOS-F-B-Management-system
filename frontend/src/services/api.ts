@@ -42,13 +42,12 @@ api.interceptors.response.use(
 );
 
 export const authAPI = {
-  adminLogin: (data: any) => api.post('/api/auth/admin/login', data),
+  adminLogin: (data: any) => api.post('/api/auth/login', data),
   adminRegister: (data: any) => api.post('/api/auth/admin/register', data),
   staffLogin: (data: any) => api.post('/api/staff/login', data),
   staffRegister: (data: any) => api.post('/api/staff/register', data),
   verifyPin: (data: any) => api.post('/api/staff/verify-pin', data),
   requestPinChange: (data: any) => api.post('/api/staff/pin-change-request', data),
-  forgotPin: (data: any) => api.post('/api/staff/forgot-pin', data),
 };
 
 export const staffAPI = {
@@ -79,7 +78,7 @@ export const staffAPI = {
 
 export const productAPI = {
   getProducts: () => api.get('/api/products'),
-  getCategories: () => api.get('/api/products/categories'),
+  getCategories: () => api.get('/api/categories'),
 };
 
 export const cardAPI = {

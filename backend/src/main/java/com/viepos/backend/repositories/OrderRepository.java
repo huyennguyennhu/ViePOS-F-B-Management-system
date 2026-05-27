@@ -37,6 +37,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     );
 
     Page<Order> findByCreatedAtBetween(LocalDateTime from, LocalDateTime to, Pageable pageable);
+    List<Order> findAllByCreatedAtBetweenOrderByCreatedAtDesc(LocalDateTime from, LocalDateTime to);
 
     Page<Order> findByCreatedAtBetweenAndStatus(
             LocalDateTime from,

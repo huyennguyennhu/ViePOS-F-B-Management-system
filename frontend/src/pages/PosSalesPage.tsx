@@ -421,8 +421,8 @@ export default function PosSalesPage() {
       localStorage.setItem('pos_order_history', JSON.stringify(orderHistory));
     } catch (err: any) {
       console.error('Lỗi khi tạo phiên thẻ:', err);
-      const errMsg = err.response?.data?.stackTrace || err.response?.data?.message || err.message;
-      prompt(`Lỗi backend khi tạo phiên thẻ. Hãy COPY nội dung bên dưới và gửi cho tớ:`, errMsg);
+      const errMsg = err.response?.data?.message || 'Không thể tạo phiên thẻ. Vui lòng thử lại.';
+      alert(errMsg);
       setIsSubmitting(false);
       return;
     }
@@ -618,8 +618,8 @@ export default function PosSalesPage() {
         });
       } catch (err: any) {
         console.error('Lỗi khi tạo đơn mang đi trên backend:', err);
-        const errMsg = err.response?.data?.stackTrace || err.response?.data?.message || err.message;
-        prompt(`Lỗi backend khi tạo đơn mang đi. Hãy COPY nội dung bên dưới và gửi cho tớ:`, errMsg);
+        const errMsg = err.response?.data?.message || 'Không thể tạo đơn mang đi. Vui lòng thử lại.';
+        alert(errMsg);
         setIsSubmitting(false);
         return;
       }

@@ -95,14 +95,23 @@ export default function SettingsPage() {
   }, [module, activeTab]);
 
   const handleExport = async () => {
+    if (!exportStartDate || !exportEndDate) {
+      alert('Vui lòng chọn khoảng ngày cần tải dữ liệu.');
+      return;
+    }
+    const start = new Date(`${exportStartDate}T00:00:00`);
+    const end = new Date(`${exportEndDate}T23:59:59`);
+    const days = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+    if (days < 0 || days > 31) {
+      alert('Khoảng tải dữ liệu tối đa là 31 ngày.');
+      return;
+    }
     try {
       setIsExporting(true);
-      
-      const params: any = {};
-      if (exportStartDate && exportEndDate) {
-        params.startDate = `${exportStartDate}T00:00:00`;
-        params.endDate = `${exportEndDate}T23:59:59`;
-      }
+      const params = {
+        startDate: `${exportStartDate}T00:00:00`,
+        endDate: `${exportEndDate}T23:59:59`,
+      };
       
       const response = await api.get('/api/settings/export/zip', {
         params,
@@ -216,7 +225,7 @@ export default function SettingsPage() {
             </p>
             <div className="settings-form-row">
               <div className="settings-form-group">
-                <label>Từ ngày (Không bắt buộc)</label>
+                <label>Từ ngày</label>
                 <input 
                   type="date" 
                   className="settings-input"
@@ -225,7 +234,7 @@ export default function SettingsPage() {
                 />
               </div>
               <div className="settings-form-group">
-                <label>Đến ngày (Không bắt buộc)</label>
+                <label>Đến ngày</label>
                 <input 
                   type="date" 
                   className="settings-input"
