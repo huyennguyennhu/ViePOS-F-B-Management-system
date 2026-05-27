@@ -8,6 +8,7 @@ import com.viepos.backend.repositories.OrderRepository;
 import com.viepos.backend.repositories.PaymentRepository;
 import com.viepos.backend.repositories.UserRepository;
 import com.viepos.backend.services.AuditLogService;
+import com.viepos.backend.services.CheckoutPaymentValidationService;
 import com.viepos.backend.services.OrderCheckoutService;
 import com.viepos.backend.services.OrderReadService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +43,9 @@ public class OrderController {
 
     @Autowired
     private OrderCheckoutService orderCheckoutService;
+
+    @Autowired
+    private CheckoutPaymentValidationService paymentValidationService;
 
     @Autowired
     private OrderReadService orderReadService;
@@ -170,6 +174,22 @@ public class OrderController {
             return ResponseEntity.badRequest().body(Map.of("message", "Thiếu thông tin đơn hàng hoặc thanh toán"));
         }
 
+        List<?> itemsObj = payload.get("items") instanceof List<?> list ? list : null;
+        CheckoutPaymentValidationService.ValidatedPayment payment;
+        try {
+            BigDecimal serverTotal = itemsObj != null && !itemsObj.isEmpty()
+                    ? orderCheckoutService.calculateItemsSubtotal(itemsObj)
+                    : BigDecimal.ZERO;
+            payment = paymentValidationService.validate(
+                    pmStr,
+                    paymentAmountStr,
+                    payload.get("cashReceived") != null ? payload.get("cashReceived").toString() : null,
+                    serverTotal
+            );
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+
         User currentUser = resolveCurrentUser();
 
         Order order = new Order();
@@ -183,7 +203,6 @@ public class OrderController {
         order.setCompletedAt(LocalDateTime.now());
         order = orderRepository.save(order);
 
-        List<?> itemsObj = payload.get("items") instanceof List<?> list ? list : null;
         try {
             if (itemsObj != null && !itemsObj.isEmpty()) {
                 orderCheckoutService.completeCheckout(order, itemsObj, currentUser, false);
@@ -195,29 +214,20 @@ public class OrderController {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
 
-        order.setTotalAmount(new BigDecimal(paymentAmountStr));
-
-        String cashReceivedStr = payload.get("cashReceived") != null ? payload.get("cashReceived").toString() : null;
-        if (cashReceivedStr != null) {
-            order.setCashReceived(new BigDecimal(cashReceivedStr));
-        } else {
-            order.setCashReceived(new BigDecimal(paymentAmountStr));
-        }
+        order.setCashReceived(payment.cashReceived());
         orderRepository.save(order);
 
-        Payment payment = new Payment();
-        payment.setPaymentCode("PAY-" + System.currentTimeMillis());
-        payment.setOrder(order);
-        payment.setPaymentMethod("transfer".equalsIgnoreCase(pmStr) || "chuyển khoản".equalsIgnoreCase(pmStr)
-                ? com.viepos.backend.models.enums.PaymentMethod.BANK_TRANSFER
-                : com.viepos.backend.models.enums.PaymentMethod.CASH);
-        payment.setAmount(order.getTotalAmount());
-        payment.setPaidAt(LocalDateTime.now());
+        Payment persistedPayment = new Payment();
+        persistedPayment.setPaymentCode("PAY-" + System.currentTimeMillis());
+        persistedPayment.setOrder(order);
+        persistedPayment.setPaymentMethod(payment.method());
+        persistedPayment.setAmount(payment.paymentAmount());
+        persistedPayment.setPaidAt(LocalDateTime.now());
 
         if (paymentImage != null && !paymentImage.isEmpty()) {
-            payment.setTransferProofImageUrl(paymentImage);
+            persistedPayment.setTransferProofImageUrl(paymentImage);
         }
-        paymentRepository.save(payment);
+        paymentRepository.save(persistedPayment);
 
         return ResponseEntity.ok(Map.of("message", "Tạo đơn mang đi thành công", "orderId", order.getId()));
     }
@@ -244,37 +254,34 @@ public class OrderController {
         }
 
         try {
+            String paymentAmountStr = payload.get("paymentAmount") != null ? payload.get("paymentAmount").toString() : null;
+            String pmStr = payload.get("paymentMethod") != null ? payload.get("paymentMethod").toString() : null;
+            BigDecimal addon = orderCheckoutService.calculateItemsSubtotal(itemsObj);
+            CheckoutPaymentValidationService.ValidatedPayment payment = paymentValidationService.validate(
+                    pmStr,
+                    paymentAmountStr,
+                    payload.get("cashReceived") != null ? payload.get("cashReceived").toString() : null,
+                    addon
+            );
+
             var saved = orderCheckoutService.completeCheckout(order, itemsObj, currentUser, true);
             order = orderRepository.findById(order.getId()).orElse(order);
 
-            String paymentAmountStr = payload.get("paymentAmount") != null ? payload.get("paymentAmount").toString() : null;
-            if (paymentAmountStr != null) {
-                BigDecimal addon = new BigDecimal(paymentAmountStr);
-                BigDecimal currentTotal = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
-                order.setTotalAmount(currentTotal.add(addon));
+            BigDecimal currentCash = order.getCashReceived() != null ? order.getCashReceived() : BigDecimal.ZERO;
+            order.setCashReceived(currentCash.add(payment.cashReceived()));
+            orderRepository.save(order);
 
-                String cashReceivedStr = payload.get("cashReceived") != null ? payload.get("cashReceived").toString() : null;
-                BigDecimal additionalCash = cashReceivedStr != null ? new BigDecimal(cashReceivedStr) : addon;
-                BigDecimal currentCash = order.getCashReceived() != null ? order.getCashReceived() : BigDecimal.ZERO;
-                order.setCashReceived(currentCash.add(additionalCash));
-
-                orderRepository.save(order);
-
-                String pmStr = payload.get("paymentMethod") != null ? payload.get("paymentMethod").toString() : "cash";
-                Payment payment = new Payment();
-                payment.setPaymentCode("PAY-" + System.currentTimeMillis());
-                payment.setOrder(order);
-                payment.setPaymentMethod("transfer".equalsIgnoreCase(pmStr) || "chuyển khoản".equalsIgnoreCase(pmStr)
-                        ? com.viepos.backend.models.enums.PaymentMethod.BANK_TRANSFER
-                        : com.viepos.backend.models.enums.PaymentMethod.CASH);
-                payment.setAmount(addon);
-                payment.setPaidAt(LocalDateTime.now());
-                Object paymentImage = payload.get("paymentImage");
-                if (paymentImage != null && !paymentImage.toString().isEmpty()) {
-                    payment.setTransferProofImageUrl(paymentImage.toString());
-                }
-                paymentRepository.save(payment);
+            Payment addonPayment = new Payment();
+            addonPayment.setPaymentCode("PAY-" + System.currentTimeMillis());
+            addonPayment.setOrder(order);
+            addonPayment.setPaymentMethod(payment.method());
+            addonPayment.setAmount(payment.paymentAmount());
+            addonPayment.setPaidAt(LocalDateTime.now());
+            Object paymentImage = payload.get("paymentImage");
+            if (paymentImage != null && !paymentImage.toString().isEmpty()) {
+                addonPayment.setTransferProofImageUrl(paymentImage.toString());
             }
+            paymentRepository.save(addonPayment);
 
             return ResponseEntity.ok(Map.of(
                     "message", "Đã thêm món vào đơn",

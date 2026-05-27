@@ -19,7 +19,6 @@ public class OrderCheckoutService {
     public static class ParsedLineItem {
         private UUID productId;
         private int quantity;
-        private BigDecimal unitPrice;
         private String note;
         private ServiceType serviceType;
 
@@ -27,8 +26,6 @@ public class OrderCheckoutService {
         public void setProductId(UUID productId) { this.productId = productId; }
         public int getQuantity() { return quantity; }
         public void setQuantity(int quantity) { this.quantity = quantity; }
-        public BigDecimal getUnitPrice() { return unitPrice; }
-        public void setUnitPrice(BigDecimal unitPrice) { this.unitPrice = unitPrice; }
         public String getNote() { return note; }
         public void setNote(String note) { this.note = note; }
         public ServiceType getServiceType() { return serviceType; }
@@ -52,6 +49,9 @@ public class OrderCheckoutService {
 
     @Autowired
     private AuditLogService auditLogService;
+
+    @Autowired
+    private ProductPriceService productPriceService;
 
     public List<ParsedLineItem> parseItems(List<?> itemsObj) {
         List<ParsedLineItem> result = new ArrayList<>();
@@ -83,16 +83,12 @@ public class OrderCheckoutService {
                 continue;
             }
 
-            BigDecimal unitPrice = itemMap.get("price") != null
-                    ? new BigDecimal(itemMap.get("price").toString())
-                    : BigDecimal.ZERO;
-
             ParsedLineItem line = new ParsedLineItem();
             line.setProductId(productId);
             line.setQuantity(quantity);
-            line.setUnitPrice(unitPrice);
             line.setNote(asString(itemMap.get("note")));
             line.setServiceType(resolveServiceType(
+                    asString(itemMap.get("serviceType")),
                     asString(itemMap.get("serveType")),
                     asString(itemMap.get("duration"))
             ));
@@ -101,19 +97,52 @@ public class OrderCheckoutService {
         return result;
     }
 
-    public static ServiceType resolveServiceType(String serveType, String duration) {
-        if (serveType != null && "takeaway".equalsIgnoreCase(serveType.trim())) {
-            return ServiceType.TAKEAWAY;
+    public static ServiceType resolveServiceType(String serviceType, String serveType, String duration) {
+        ServiceType fromServiceType = resolveServiceAlias(serviceType);
+        if (fromServiceType != null) {
+            return fromServiceType;
         }
-        if (duration != null) {
-            if ("4h".equalsIgnoreCase(duration.trim())) {
-                return ServiceType.FOUR_HOURS;
-            }
-            if ("all_day".equalsIgnoreCase(duration.trim())) {
-                return ServiceType.FULL_DAY;
-            }
+        ServiceType fromServeType = resolveServiceAlias(serveType);
+        if (fromServeType != null) {
+            return fromServeType;
+        }
+        ServiceType fromDuration = resolveServiceAlias(duration);
+        if (fromDuration != null) {
+            return fromDuration;
         }
         return ServiceType.TAKEAWAY;
+    }
+
+    public static ServiceType resolveServiceType(String serveType, String duration) {
+        return resolveServiceType(null, serveType, duration);
+    }
+
+    private static ServiceType resolveServiceAlias(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim().toUpperCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
+        return switch (normalized) {
+            case "TAKEAWAY", "TAKE_AWAY", "MANG_DI" -> ServiceType.TAKEAWAY;
+            case "PACKAGE_4H" -> ServiceType.PACKAGE_4H;
+            case "4H", "FOUR_HOURS" -> ServiceType.FOUR_HOURS;
+            case "FULLTIME", "FULL_TIME" -> ServiceType.FULLTIME;
+            case "ALL_DAY", "FULL_DAY" -> ServiceType.FULL_DAY;
+            default -> null;
+        };
+    }
+
+    public BigDecimal calculateItemsSubtotal(List<?> itemsObj) {
+        List<ParsedLineItem> parsed = parseItems(itemsObj);
+        BigDecimal linesSubtotal = BigDecimal.ZERO;
+        for (ParsedLineItem line : parsed) {
+            Product product = productRepository.findById(line.getProductId())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Không tìm thấy sản phẩm: " + line.getProductId()));
+            BigDecimal unitPrice = productPriceService.priceFor(product, line.getServiceType());
+            linesSubtotal = linesSubtotal.add(unitPrice.multiply(BigDecimal.valueOf(line.getQuantity())));
+        }
+        return linesSubtotal;
     }
 
     @Transactional
@@ -131,8 +160,9 @@ public class OrderCheckoutService {
             orderItem.setOrder(order);
             orderItem.setProduct(product);
             orderItem.setQuantity(line.getQuantity());
-            orderItem.setUnitPrice(line.getUnitPrice());
-            orderItem.setLineTotal(line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity())));
+            BigDecimal unitPrice = productPriceService.priceFor(product, line.getServiceType());
+            orderItem.setUnitPrice(unitPrice);
+            orderItem.setLineTotal(unitPrice.multiply(BigDecimal.valueOf(line.getQuantity())));
             orderItem.setServiceType(line.getServiceType());
             orderItem.setNote(line.getNote());
 

@@ -2,6 +2,7 @@ package com.viepos.backend.services;
 
 import com.viepos.backend.models.Category;
 import com.viepos.backend.models.Product;
+import com.viepos.backend.models.enums.ServiceType;
 import com.viepos.backend.repositories.ProductRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -62,6 +63,16 @@ public class ProductPriceService {
             prices.put("pricePackageFullday", safe(product.getPricePackageFullday()));
         }
         return prices;
+    }
+
+    public BigDecimal priceFor(Product product, ServiceType serviceType) {
+        Map<String, Object> prices = effectivePrices(product);
+        ServiceType normalized = serviceType != null ? serviceType : ServiceType.TAKEAWAY;
+        return switch (normalized) {
+            case PACKAGE_4H, FOUR_HOURS -> safe((BigDecimal) prices.get("pricePackage4h"));
+            case FULLTIME, FULL_DAY -> safe((BigDecimal) prices.get("pricePackageFullday"));
+            case TAKEAWAY -> safe((BigDecimal) prices.get("priceTakeaway"));
+        };
     }
 
     private static BigDecimal safe(BigDecimal value) {

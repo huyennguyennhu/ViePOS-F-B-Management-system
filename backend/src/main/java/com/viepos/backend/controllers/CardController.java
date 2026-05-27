@@ -7,7 +7,6 @@ import com.viepos.backend.models.ServiceSession;
 import com.viepos.backend.models.User;
 import com.viepos.backend.models.enums.CardStatus;
 import com.viepos.backend.models.enums.OrderStatus;
-import com.viepos.backend.models.enums.PaymentMethod;
 import com.viepos.backend.models.enums.ServiceType;
 import com.viepos.backend.models.enums.SessionStatus;
 import com.viepos.backend.repositories.OrderRepository;
@@ -16,6 +15,7 @@ import com.viepos.backend.repositories.ServiceCardRepository;
 import com.viepos.backend.repositories.ServiceSessionRepository;
 import com.viepos.backend.repositories.UserRepository;
 import com.viepos.backend.services.AuditLogService;
+import com.viepos.backend.services.CheckoutPaymentValidationService;
 import com.viepos.backend.services.OrderCheckoutService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -55,6 +55,9 @@ public class CardController {
     @Autowired
     private OrderCheckoutService orderCheckoutService;
 
+    @Autowired
+    private CheckoutPaymentValidationService paymentValidationService;
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handleException(Exception e) {
         java.io.StringWriter sw = new java.io.StringWriter();
@@ -93,6 +96,26 @@ public class CardController {
             return ResponseEntity.badRequest().body(Map.of("message", "Thẻ này không trống. Trạng thái hiện tại: " + card.getStatus()));
         }
 
+        List<?> itemsObj = payload.get("items") instanceof List<?> list ? list : null;
+        CheckoutPaymentValidationService.ValidatedPayment payment = null;
+        try {
+            BigDecimal serverTotal = itemsObj != null && !itemsObj.isEmpty()
+                    ? orderCheckoutService.calculateItemsSubtotal(itemsObj)
+                    : BigDecimal.ZERO;
+            String pmStr = payload.get("paymentMethod") != null ? payload.get("paymentMethod").toString() : null;
+            String paymentAmountStr = payload.get("paymentAmount") != null ? payload.get("paymentAmount").toString() : null;
+            if (serverTotal.compareTo(BigDecimal.ZERO) > 0 || pmStr != null || paymentAmountStr != null) {
+                payment = paymentValidationService.validate(
+                        pmStr,
+                        paymentAmountStr,
+                        payload.get("cashReceived") != null ? payload.get("cashReceived").toString() : null,
+                        serverTotal
+                );
+            }
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+
         User currentUser = resolveCurrentUser();
 
         Optional<Order> existingOrder = orderRepository.findByOrderCode(orderCode);
@@ -115,9 +138,12 @@ public class CardController {
         card.setStatus(CardStatus.IN_USE);
         cardRepository.save(card);
 
-        ServiceType sType = "4h".equalsIgnoreCase(duration) ? ServiceType.PACKAGE_4H : ServiceType.FULLTIME;
+        ServiceType requestedServiceType = OrderCheckoutService.resolveServiceType(duration, duration);
+        boolean fourHourSession = requestedServiceType == ServiceType.PACKAGE_4H
+                || requestedServiceType == ServiceType.FOUR_HOURS;
+        ServiceType sType = fourHourSession ? ServiceType.PACKAGE_4H : ServiceType.FULLTIME;
         LocalDateTime startTime = LocalDateTime.now();
-        LocalDateTime endTime = "4h".equalsIgnoreCase(duration)
+        LocalDateTime endTime = fourHourSession
                 ? startTime.plusHours(4)
                 : startTime.withHour(22).withMinute(0).withSecond(0);
 
@@ -135,7 +161,6 @@ public class CardController {
 
         order.setSession(savedSession);
 
-        List<?> itemsObj = payload.get("items") instanceof List<?> list ? list : null;
         try {
             if (itemsObj != null && !itemsObj.isEmpty()) {
                 orderCheckoutService.completeCheckout(order, itemsObj, currentUser, false);
@@ -147,20 +172,12 @@ public class CardController {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
 
-        String paymentAmountStr = payload.get("paymentAmount") != null ? payload.get("paymentAmount").toString() : null;
-        if (paymentAmountStr != null) {
-            order.setTotalAmount(new BigDecimal(paymentAmountStr));
-        }
-
-        String cashReceivedStr = payload.get("cashReceived") != null ? payload.get("cashReceived").toString() : null;
-        if (cashReceivedStr != null) {
-            order.setCashReceived(new BigDecimal(cashReceivedStr));
-        } else if (paymentAmountStr != null) {
-            order.setCashReceived(new BigDecimal(paymentAmountStr));
+        if (payment != null) {
+            order.setCashReceived(payment.cashReceived());
         }
         orderRepository.save(order);
 
-        savePaymentIfPresent(order, payload);
+        savePaymentIfPresent(order, payload, payment);
 
         return ResponseEntity.ok(savedSession);
     }
@@ -261,20 +278,19 @@ public class CardController {
                 .orElseThrow(() -> new IllegalStateException("Không có user trong hệ thống"));
     }
 
-    private void savePaymentIfPresent(Order order, Map<String, Object> payload) {
-        String pmStr = payload.get("paymentMethod") != null ? payload.get("paymentMethod").toString() : null;
-        if (pmStr == null) {
+    private void savePaymentIfPresent(
+            Order order,
+            Map<String, Object> payload,
+            CheckoutPaymentValidationService.ValidatedPayment validatedPayment
+    ) {
+        if (validatedPayment == null) {
             return;
         }
         Payment payment = new Payment();
         payment.setPaymentCode("PAY-" + System.currentTimeMillis());
         payment.setOrder(order);
-        payment.setPaymentMethod(
-                "transfer".equalsIgnoreCase(pmStr) || "chuyển khoản".equalsIgnoreCase(pmStr)
-                        ? PaymentMethod.BANK_TRANSFER
-                        : PaymentMethod.CASH
-        );
-        payment.setAmount(order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO);
+        payment.setPaymentMethod(validatedPayment.method());
+        payment.setAmount(validatedPayment.paymentAmount());
         payment.setPaidAt(LocalDateTime.now());
 
         Object paymentImage = payload.get("paymentImage");
