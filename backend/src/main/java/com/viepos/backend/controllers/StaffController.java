@@ -147,6 +147,22 @@ public class StaffController {
         return userRepository.findByEmail(username).orElse(null);
     }
 
+    private boolean currentUserIsRootAdmin() {
+        User currentUser = getCurrentUser();
+        return currentUser != null
+                && currentUser.getEmployee() != null
+                && currentUser.getEmployee().getRole() == EmployeeRole.ROOT_ADMIN;
+    }
+
+    private static boolean isElevatedRole(EmployeeRole role) {
+        return role == EmployeeRole.ADMIN || role == EmployeeRole.ROOT_ADMIN;
+    }
+
+    private static EmployeeRole requestedRegisterRole(AccountRequest req) {
+        String fullName = req.getRequestFullName();
+        return fullName != null && fullName.endsWith(" [ADMIN]") ? EmployeeRole.ADMIN : EmployeeRole.STAFF;
+    }
+
     @PostMapping("/register")
     public ResponseEntity<?> registerStaff(@RequestBody Map<String, String> request) {
         String name = request.get("name");
@@ -195,12 +211,15 @@ public class StaffController {
                 return ResponseEntity.status(400).body(Map.of("message", "Yêu cầu này đã được xử lý."));
             }
             User currentUser = getCurrentUser();
-            if (currentUser != null && currentUser.getEmployee() != null) {
-                if (currentUser.getEmployee().getRole() == EmployeeRole.ADMIN) {
-                    if (req.getEmployee() != null && (req.getEmployee().getRole() == EmployeeRole.ADMIN || req.getEmployee().getRole() == EmployeeRole.ROOT_ADMIN)) {
-                        return ResponseEntity.status(403).body(Map.of("message", "Bạn không có quyền duyệt yêu cầu của Quản lý khác."));
-                    }
-                }
+            EmployeeRole newRole = requestedRegisterRole(req);
+            if (isElevatedRole(newRole) && !currentUserIsRootAdmin()) {
+                return ResponseEntity.status(403).body(Map.of("message", "Chỉ Root Admin được duyệt yêu cầu tạo tài khoản Quản lý."));
+            }
+            if (currentUser != null && currentUser.getEmployee() != null
+                    && currentUser.getEmployee().getRole() == EmployeeRole.ADMIN
+                    && req.getEmployee() != null
+                    && isElevatedRole(req.getEmployee().getRole())) {
+                return ResponseEntity.status(403).body(Map.of("message", "Bạn không có quyền duyệt yêu cầu của Quản lý khác."));
             }
             if (userRepository.existsByEmail(req.getRequestEmail())) {
                 return ResponseEntity.status(400).body(Map.of("message", "Email này đã tồn tại trong hệ thống."));
@@ -216,10 +235,8 @@ public class StaffController {
             requestRepository.save(req);
 
             String fullName = req.getRequestFullName();
-            EmployeeRole newRole = EmployeeRole.STAFF;
             if (fullName != null && fullName.endsWith(" [ADMIN]")) {
                 fullName = fullName.substring(0, fullName.length() - 8).trim();
-                newRole = EmployeeRole.ADMIN;
             }
 
             Employee emp = new Employee();
@@ -527,6 +544,12 @@ public class StaffController {
                 return ResponseEntity.status(403).body(Map.of("message", "Bạn không có quyền tạo tài khoản Quản lý. Vui lòng liên hệ Root Admin."));
             }
         }
+        if (isElevatedRole(empRole) && !currentUserIsRootAdmin()) {
+            return ResponseEntity.status(403).body(Map.of("message", "Chỉ Root Admin được tạo tài khoản Quản lý."));
+        }
+        if (isElevatedRole(empRole) && (password == null || password.isBlank())) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Tài khoản quản lý cần mật khẩu đăng nhập"));
+        }
 
         Employee emp = new Employee();
         emp.setEmployeeId("EMP" + System.currentTimeMillis());
@@ -543,9 +566,6 @@ public class StaffController {
         if (empRole == EmployeeRole.STAFF) {
             user.setPassword(passwordEncoder.encode(pin));
         } else {
-            if (password == null || password.isBlank()) {
-                return ResponseEntity.badRequest().body(Map.of("message", "Tài khoản quản lý cần mật khẩu đăng nhập"));
-            }
             user.setPassword(passwordEncoder.encode(password));
         }
         userRepository.save(user);
@@ -568,6 +588,9 @@ public class StaffController {
             if (emp.getRole() == EmployeeRole.ADMIN || emp.getRole() == EmployeeRole.ROOT_ADMIN) {
                 return ResponseEntity.status(403).body(Map.of("message", "Bạn không có quyền chỉnh sửa tài khoản Quản lý khác."));
             }
+        }
+        if (isElevatedRole(emp.getRole()) && !currentUserIsRootAdmin()) {
+            return ResponseEntity.status(403).body(Map.of("message", "Chỉ Root Admin được chỉnh sửa tài khoản Quản lý."));
         }
 
         if (body.containsKey("name")) emp.setFullName(body.get("name"));
@@ -592,7 +615,11 @@ public class StaffController {
             } catch (IllegalArgumentException ignored) {}
         }
         if (body.containsKey("role")) {
-            emp.setRole(resolveEmployeeRole(body.get("role")));
+            EmployeeRole requestedRole = resolveEmployeeRole(body.get("role"));
+            if (isElevatedRole(requestedRole) && !currentUserIsRootAdmin()) {
+                return ResponseEntity.status(403).body(Map.of("message", "Chỉ Root Admin được cấp quyền Quản lý."));
+            }
+            emp.setRole(requestedRole);
         }
         employeeRepository.save(emp);
         userRepository.save(user);
@@ -614,6 +641,9 @@ public class StaffController {
             if (emp.getRole() == EmployeeRole.ADMIN || emp.getRole() == EmployeeRole.ROOT_ADMIN) {
                 return ResponseEntity.status(403).body(Map.of("message", "Bạn không có quyền khóa tài khoản Quản lý khác."));
             }
+        }
+        if (isElevatedRole(emp.getRole()) && !currentUserIsRootAdmin()) {
+            return ResponseEntity.status(403).body(Map.of("message", "Chỉ Root Admin được khóa tài khoản Quản lý."));
         }
 
         emp.setStatus(EmployeeStatus.RESIGNED);
