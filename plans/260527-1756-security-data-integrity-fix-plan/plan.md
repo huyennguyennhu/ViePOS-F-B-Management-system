@@ -64,6 +64,9 @@ Last updated: 2026-05-28.
 - Phase 4 fixed source: `OrderCheckoutService` resolves prices through `ProductPriceService`, `CheckoutPaymentValidationService` rejects mismatched tender before touched write paths, and card session duration aliases reuse checkout service-type normalization.
 - Phase 5 issue #5 is implemented and reviewed. Manual export now maps to backend `EXPORT`, existing DBs have a non-destructive enum patch, inventory mutations lock products in stable order, and export/sale paths reject negative stock before writes.
 - Phase 5 issue #6 is implemented and reviewed. Card session start locks the card row, rejects existing active sessions before side effects, and cancellation locks the order row, restocks once, records inventory adjustment, preserves payments, completes active sessions, and releases cards.
+- Phase 6 issue #7 is implemented and reviewed. Stack traces are removed from API responses, CSV exports neutralize spreadsheet formulas including whitespace/control-prefix variants, and export ZIP reads are bounded to explicit date ranges of 31 days or less.
+- Phase 6 issue #8 is implemented and reviewed. Frontend wrappers now target existing backend routes for admin login and categories, and no logged-out forgot-PIN submit wrapper remains.
+- Phase 6 verification passed: targeted backend tests passed 6 tests, full backend suite passed 54 tests, frontend build passed with only the existing Vite large chunk warning, static leak/contract grep returned no matches, and final code review found no findings.
 
 ## Phases
 
@@ -74,7 +77,7 @@ Last updated: 2026-05-28.
 | 3 | [Account Request and PIN Safety](./phase-03-account-request-and-pin-safety.md) | Completed |
 | 4 | [Checkout Total Ownership](./phase-04-checkout-total-ownership.md) | Completed |
 | 5 | [Inventory and Session Consistency](./phase-05-inventory-and-session-consistency.md) | Completed |
-| 6 | [Data Exposure and API Contracts](./phase-06-data-exposure-and-api-contracts.md) | Pending |
+| 6 | [Data Exposure and API Contracts](./phase-06-data-exposure-and-api-contracts.md) | Completed |
 | 7 | [Regression Verification](./phase-07-regression-verification.md) | Pending |
 
 ## Dependencies
@@ -171,9 +174,9 @@ Last updated: 2026-05-28.
 - [x] Backend tests cover checkout server-side pricing and append total.
 - [x] Backend tests cover payment mismatch, cash over-tender, and append addon payment amount.
 - [x] Backend tests cover inventory export enum, negative stock rejection, and session double-book guard.
-- [ ] Frontend build/type-check passes after API wrapper changes.
-- [ ] No stack traces or raw secrets in API responses or docs/config.
-- [ ] `git diff` secret scan before commit.
+- [x] Frontend build/type-check passes after API wrapper changes.
+- [x] No stack traces or raw secrets in API responses/config.
+- [x] `git diff` secret scan before commit.
 
 ## Unresolved Questions
 
