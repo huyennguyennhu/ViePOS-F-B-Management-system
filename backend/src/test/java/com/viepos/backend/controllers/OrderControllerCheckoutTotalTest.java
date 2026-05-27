@@ -113,6 +113,7 @@ class OrderControllerCheckoutTotalTest {
                 new BigDecimal("120000")
         );
         when(productRepository.findById(takeawayProduct.getId())).thenReturn(Optional.of(takeawayProduct));
+        lenient().when(productRepository.findByIdForUpdate(takeawayProduct.getId())).thenReturn(Optional.of(takeawayProduct));
         lenient().when(orderItemRepository.save(any(OrderItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
             Order order = invocation.getArgument(0);
@@ -172,6 +173,18 @@ class OrderControllerCheckoutTotalTest {
         ResponseEntity<?> response = controller.createTakeawayOrder(takeawayPayload("60000", "cash", "59000", "60000"));
 
         assertThat(response.getStatusCode().value()).isEqualTo(400);
+        verify(paymentRepository, never()).save(any(Payment.class));
+    }
+
+    @Test
+    void takeawayRejectsInsufficientStockBeforeCreatingOrder() {
+        takeawayProduct.setCurrentStock(BigDecimal.ZERO);
+
+        ResponseEntity<?> response = controller.createTakeawayOrder(takeawayPayload("60000", "cash", "60000", "60000"));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(400);
+        verify(orderRepository, never()).save(any(Order.class));
+        verify(orderItemRepository, never()).save(any(OrderItem.class));
         verify(paymentRepository, never()).save(any(Payment.class));
     }
 

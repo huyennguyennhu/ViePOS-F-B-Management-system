@@ -16,6 +16,12 @@ import java.util.*;
 @Service
 public class OrderCheckoutService {
 
+    private record PreparedStockDeduction(Product product, BigDecimal quantity, BigDecimal stockBefore, BigDecimal stockAfter) {
+    }
+
+    private record StockRequest(UUID productId, BigDecimal quantity) {
+    }
+
     public static class ParsedLineItem {
         private UUID productId;
         private int quantity;
@@ -145,6 +151,13 @@ public class OrderCheckoutService {
         return linesSubtotal;
     }
 
+    @Transactional(noRollbackFor = IllegalArgumentException.class)
+    public void validateInventoryAvailable(List<?> itemsObj) {
+        prepareStockDeductions(parseItems(itemsObj).stream()
+                .map(line -> new StockRequest(line.getProductId(), BigDecimal.valueOf(line.getQuantity())))
+                .toList());
+    }
+
     @Transactional
     public List<OrderItem> saveOrderItems(Order order, List<?> itemsObj, boolean appendTotals) {
         List<ParsedLineItem> parsed = parseItems(itemsObj);
@@ -199,6 +212,11 @@ public class OrderCheckoutService {
             return;
         }
 
+        List<PreparedStockDeduction> preparedDeductions = prepareStockDeductions(items.stream()
+                .filter(item -> item.getProduct() != null && item.getProduct().getId() != null)
+                .map(item -> new StockRequest(item.getProduct().getId(), BigDecimal.valueOf(item.getQuantity())))
+                .toList());
+
         InventoryTransaction transaction = new InventoryTransaction();
         transaction.setInvenTransactionId("SALE-" + order.getOrderCode() + "-" + System.currentTimeMillis());
         transaction.setTransactionType(TransactionType.SALE);
@@ -207,29 +225,58 @@ public class OrderCheckoutService {
         transaction.setNote("Trừ tồn kho từ đơn " + order.getOrderCode());
         transaction = transactionRepository.save(transaction);
 
-        for (OrderItem item : items) {
-            Product product = item.getProduct();
-            if (product == null) {
-                continue;
-            }
-            BigDecimal qty = BigDecimal.valueOf(item.getQuantity());
-            BigDecimal stockBefore = product.getCurrentStock() != null ? product.getCurrentStock() : BigDecimal.ZERO;
-            BigDecimal stockAfter = stockBefore.subtract(qty);
-
-            product.setCurrentStock(stockAfter);
+        for (PreparedStockDeduction deduction : preparedDeductions) {
+            Product product = deduction.product();
+            product.setCurrentStock(deduction.stockAfter());
             BigDecimal minimum = product.getMinimumStock() != null ? product.getMinimumStock() : BigDecimal.ZERO;
-            product.setIsOutOfStock(stockAfter.compareTo(minimum) <= 0);
+            product.setIsOutOfStock(deduction.stockAfter().compareTo(minimum) <= 0);
             productRepository.save(product);
 
             InventoryItem invItem = new InventoryItem();
             invItem.setInventoryTransaction(transaction);
             invItem.setProduct(product);
-            invItem.setQuantity(qty);
+            invItem.setQuantity(deduction.quantity());
             invItem.setUnitCost(product.getCostPrice() != null ? product.getCostPrice() : BigDecimal.ZERO);
-            invItem.setStockBefore(stockBefore);
-            invItem.setStockAfter(stockAfter);
+            invItem.setStockBefore(deduction.stockBefore());
+            invItem.setStockAfter(deduction.stockAfter());
             inventoryItemRepository.save(invItem);
         }
+    }
+
+    private List<PreparedStockDeduction> prepareStockDeductions(List<StockRequest> requests) {
+        Map<UUID, Product> lockedProducts = lockProducts(requests.stream()
+                .map(StockRequest::productId)
+                .toList());
+        Map<UUID, BigDecimal> runningStocks = new LinkedHashMap<>();
+        List<PreparedStockDeduction> prepared = new ArrayList<>();
+
+        for (StockRequest request : requests) {
+            UUID productId = request.productId();
+            Product product = lockedProducts.get(productId);
+            BigDecimal qty = request.quantity();
+            BigDecimal stockBefore = runningStocks.getOrDefault(
+                    productId,
+                    product.getCurrentStock() != null ? product.getCurrentStock() : BigDecimal.ZERO
+            );
+            BigDecimal stockAfter = stockBefore.subtract(qty);
+            if (stockAfter.compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalArgumentException("Không đủ tồn kho cho sản phẩm " + product.getName());
+            }
+            runningStocks.put(productId, stockAfter);
+            prepared.add(new PreparedStockDeduction(product, qty, stockBefore, stockAfter));
+        }
+
+        return prepared;
+    }
+
+    private Map<UUID, Product> lockProducts(Collection<UUID> productIds) {
+        Map<UUID, Product> products = new LinkedHashMap<>();
+        productIds.stream()
+                .distinct()
+                .sorted()
+                .forEach(id -> products.put(id, productRepository.findByIdForUpdate(id)
+                        .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm: " + id))));
+        return products;
     }
 
     public void auditOrderCreate(User actor, Order order, List<OrderItem> items) {
@@ -242,7 +289,6 @@ public class OrderCheckoutService {
         auditLogService.log(actor, AuditAction.CREATE, "orders", order.getId(), null, snapshot);
     }
 
-    @Transactional
     public List<OrderItem> completeCheckout(Order order, List<?> itemsObj, User actor, boolean appendTotals) {
         List<OrderItem> saved = saveOrderItems(order, itemsObj, appendTotals);
         if (!saved.isEmpty()) {

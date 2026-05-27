@@ -112,6 +112,7 @@ public class CardController {
                         serverTotal
                 );
             }
+            orderCheckoutService.validateInventoryAvailable(itemsObj);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }

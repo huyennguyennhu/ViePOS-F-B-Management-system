@@ -28,6 +28,12 @@ import java.util.stream.Collectors;
 @CrossOrigin(origins = "*", allowedHeaders = "*")
 public class InventoryController {
 
+    private record ParsedInventoryLine(UUID productId, BigDecimal quantity) {
+    }
+
+    private record PreparedInventoryLine(Product product, BigDecimal quantity, BigDecimal stockBefore, BigDecimal stockAfter) {
+    }
+
     @Autowired
     private InventoryTransactionRepository transactionRepository;
 
@@ -134,9 +140,19 @@ public class InventoryController {
 
         TransactionType type;
         try {
-            type = TransactionType.valueOf(typeStr.toUpperCase());
+            type = resolveTransactionType(typeStr);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("message", "Loại giao dịch không hợp lệ"));
+        }
+
+        List<ParsedInventoryLine> parsedLines;
+        try {
+            parsedLines = parseInventoryLines(itemsObj);
+            if (parsedLines.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("message", "Thiếu danh sách sản phẩm hợp lệ"));
+            }
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -156,6 +172,13 @@ public class InventoryController {
             currentUser = userRepository.findAll().stream().findFirst().orElseThrow();
         }
 
+        List<PreparedInventoryLine> preparedLines;
+        try {
+            preparedLines = prepareInventoryLines(type, parsedLines);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+
         InventoryTransaction transaction = new InventoryTransaction();
         transaction.setInvenTransactionId((type == TransactionType.IMPORT ? "INP-" : "EXP-") + System.currentTimeMillis());
         transaction.setTransactionType(type);
@@ -163,39 +186,88 @@ public class InventoryController {
         transaction.setCreatedBy(currentUser);
         transaction = transactionRepository.save(transaction);
 
-        for (Object itemObj : itemsObj) {
-            if (itemObj instanceof Map) {
-                Map<?, ?> itemMap = (Map<?, ?>) itemObj;
-                String productId = (String) itemMap.get("productId");
-                BigDecimal quantity = itemMap.get("quantity") != null ? new BigDecimal(itemMap.get("quantity").toString()) : BigDecimal.ZERO;
+        for (PreparedInventoryLine line : preparedLines) {
+            Product product = line.product();
+            product.setCurrentStock(line.stockAfter());
+            BigDecimal minimum = product.getMinimumStock() != null ? product.getMinimumStock() : BigDecimal.ZERO;
+            product.setIsOutOfStock(line.stockAfter().compareTo(minimum) <= 0);
+            productRepository.save(product);
 
-                if (productId != null && quantity.compareTo(BigDecimal.ZERO) > 0) {
-                    Product product = productRepository.findById(UUID.fromString(productId)).orElse(null);
-                    if (product != null) {
-                        BigDecimal stockBefore = product.getCurrentStock() != null ? product.getCurrentStock() : BigDecimal.ZERO;
-                        BigDecimal stockAfter;
-
-                        if (type == TransactionType.IMPORT) {
-                            stockAfter = stockBefore.add(quantity);
-                        } else {
-                            stockAfter = stockBefore.subtract(quantity);
-                        }
-
-                        product.setCurrentStock(stockAfter);
-                        productRepository.save(product);
-
-                        InventoryItem item = new InventoryItem();
-                        item.setInventoryTransaction(transaction);
-                        item.setProduct(product);
-                        item.setQuantity(quantity);
-                        item.setStockBefore(stockBefore);
-                        item.setStockAfter(stockAfter);
-                        itemRepository.save(item);
-                    }
-                }
-            }
+            InventoryItem item = new InventoryItem();
+            item.setInventoryTransaction(transaction);
+            item.setProduct(product);
+            item.setQuantity(line.quantity());
+            item.setStockBefore(line.stockBefore());
+            item.setStockAfter(line.stockAfter());
+            itemRepository.save(item);
         }
 
         return ResponseEntity.ok(Map.of("message", "Ghi nhận giao dịch kho thành công"));
+    }
+
+    private static TransactionType resolveTransactionType(String typeStr) {
+        if (typeStr == null) {
+            throw new IllegalArgumentException("Loại giao dịch không hợp lệ");
+        }
+        String normalized = typeStr.trim().toUpperCase(Locale.ROOT);
+        if ("EXPORT".equals(normalized)) {
+            return TransactionType.EXPORT;
+        }
+        return TransactionType.valueOf(normalized);
+    }
+
+    private static List<ParsedInventoryLine> parseInventoryLines(List<?> itemsObj) {
+        List<ParsedInventoryLine> lines = new ArrayList<>();
+        for (Object itemObj : itemsObj) {
+            if (!(itemObj instanceof Map<?, ?> itemMap)) {
+                continue;
+            }
+            Object productIdRaw = itemMap.get("productId");
+            if (productIdRaw == null) {
+                continue;
+            }
+            BigDecimal quantity = itemMap.get("quantity") != null
+                    ? new BigDecimal(itemMap.get("quantity").toString())
+                    : BigDecimal.ZERO;
+            if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            lines.add(new ParsedInventoryLine(UUID.fromString(productIdRaw.toString()), quantity));
+        }
+        return lines;
+    }
+
+    private List<PreparedInventoryLine> prepareInventoryLines(TransactionType type, List<ParsedInventoryLine> lines) {
+        boolean decrement = type != TransactionType.IMPORT;
+        Map<UUID, Product> products = lockProducts(lines.stream()
+                .map(ParsedInventoryLine::productId)
+                .toList());
+        Map<UUID, BigDecimal> runningStocks = new LinkedHashMap<>();
+        List<PreparedInventoryLine> prepared = new ArrayList<>();
+
+        for (ParsedInventoryLine line : lines) {
+            Product product = products.get(line.productId());
+            BigDecimal stockBefore = runningStocks.getOrDefault(
+                    line.productId(),
+                    product.getCurrentStock() != null ? product.getCurrentStock() : BigDecimal.ZERO
+            );
+            BigDecimal stockAfter = decrement ? stockBefore.subtract(line.quantity()) : stockBefore.add(line.quantity());
+            if (decrement && stockAfter.compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalArgumentException("Không đủ tồn kho cho sản phẩm " + product.getName());
+            }
+            runningStocks.put(line.productId(), stockAfter);
+            prepared.add(new PreparedInventoryLine(product, line.quantity(), stockBefore, stockAfter));
+        }
+        return prepared;
+    }
+
+    private Map<UUID, Product> lockProducts(Collection<UUID> productIds) {
+        Map<UUID, Product> products = new LinkedHashMap<>();
+        productIds.stream()
+                .distinct()
+                .sorted()
+                .forEach(id -> products.put(id, productRepository.findByIdForUpdate(id)
+                        .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm: " + id))));
+        return products;
     }
 }

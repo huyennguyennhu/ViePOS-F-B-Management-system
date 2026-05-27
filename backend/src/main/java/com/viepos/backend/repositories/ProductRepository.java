@@ -1,7 +1,9 @@
 package com.viepos.backend.repositories;
 
 import com.viepos.backend.models.Product;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -14,6 +16,10 @@ import java.util.stream.Collectors;
 
 @Repository
 public interface ProductRepository extends JpaRepository<Product, UUID> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Product p WHERE p.id = :id")
+    Optional<Product> findByIdForUpdate(@Param("id") UUID id);
+
     Optional<Product> findByProductCode(String productCode);
     Optional<Product> findBySku(String sku);
     List<Product> findByCategory_Id(UUID categoryId);

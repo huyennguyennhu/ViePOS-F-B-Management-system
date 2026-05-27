@@ -121,6 +121,7 @@ class CardControllerCheckoutTotalTest {
 
         product = product(new BigDecimal("60000"), new BigDecimal("90000"), new BigDecimal("120000"));
         when(productRepository.findById(product.getId())).thenReturn(Optional.of(product));
+        lenient().when(productRepository.findByIdForUpdate(product.getId())).thenReturn(Optional.of(product));
         lenient().when(orderRepository.findByOrderCode("ORDER-CARD")).thenReturn(Optional.empty());
         lenient().when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
             Order order = invocation.getArgument(0);

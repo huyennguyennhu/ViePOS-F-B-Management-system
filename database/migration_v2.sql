@@ -56,7 +56,7 @@ DROP TYPE IF EXISTS payment_method_enum CASCADE;
 CREATE TYPE payment_method_enum AS ENUM ('CASH', 'BANK_TRANSFER');
 
 DROP TYPE IF EXISTS transaction_type_enum CASCADE;
-CREATE TYPE transaction_type_enum AS ENUM ('IMPORT', 'SALE', 'ADJUSTMENT', 'DAMAGE');
+CREATE TYPE transaction_type_enum AS ENUM ('IMPORT', 'EXPORT', 'SALE', 'ADJUSTMENT', 'DAMAGE');
 
 DROP TYPE IF EXISTS audit_action CASCADE;
 CREATE TYPE audit_action AS ENUM ('CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'APPROVE', 'REJECT');

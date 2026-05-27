@@ -186,6 +186,7 @@ public class OrderController {
                     payload.get("cashReceived") != null ? payload.get("cashReceived").toString() : null,
                     serverTotal
             );
+            orderCheckoutService.validateInventoryAvailable(itemsObj);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
@@ -263,6 +264,7 @@ public class OrderController {
                     payload.get("cashReceived") != null ? payload.get("cashReceived").toString() : null,
                     addon
             );
+            orderCheckoutService.validateInventoryAvailable(itemsObj);
 
             var saved = orderCheckoutService.completeCheckout(order, itemsObj, currentUser, true);
             order = orderRepository.findById(order.getId()).orElse(order);
