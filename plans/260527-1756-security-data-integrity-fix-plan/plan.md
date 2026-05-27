@@ -59,6 +59,7 @@ Last updated: 2026-05-27.
 - Phase 1 remains incident-open operationally until owner confirms Supabase/JWT/root credential rotation and exposed-history handling.
 - Phase 2 code is implemented and reviewed. Backend route matrix and elevated-target guard tests pass in `cd backend && bash ./mvnw test`.
 - Phase 2 fixed source: `SecurityConfig` now uses explicit allowlists plus deny-by-default fallback; `StaffController` blocks ADMIN from creating/promoting/editing/deleting ADMIN or ROOT_ADMIN targets.
+- Phase 3 code is implemented and reviewed. Account/PIN request safety tests pass; frontend forgot-PIN no longer submits logged-out reset data.
 
 ## Phases
 
@@ -66,7 +67,7 @@ Last updated: 2026-05-27.
 |-------|------|--------|
 | 1 | [Incident Containment](./phase-01-incident-containment.md) | Completed |
 | 2 | [Authorization Boundary](./phase-02-authorization-boundary.md) | Completed |
-| 3 | [Account Request and PIN Safety](./phase-03-account-request-and-pin-safety.md) | Pending |
+| 3 | [Account Request and PIN Safety](./phase-03-account-request-and-pin-safety.md) | Completed |
 | 4 | [Checkout Total Ownership](./phase-04-checkout-total-ownership.md) | Pending |
 | 5 | [Inventory and Session Consistency](./phase-05-inventory-and-session-consistency.md) | Pending |
 | 6 | [Data Exposure and API Contracts](./phase-06-data-exposure-and-api-contracts.md) | Pending |
@@ -126,12 +127,19 @@ Last updated: 2026-05-27.
 - Code review: code-reviewer re-review found no blocking issues after `/api/settings/data-range` was made ROOT_ADMIN-only and missing matrix rows were added.
 - Regression coverage includes STAFF management denials, ADMIN root-settings denial, ROOT_ADMIN settings access, unlisted `/api/**` fallback denial, and elevated target create/promote/edit/delete guards.
 
+## Phase 3 Evidence
+
+- Backend tests: `cd backend && bash ./mvnw test` passed 24 tests, 0 failures/errors.
+- Frontend build: `cd frontend && pnpm run build` passed.
+- Code review: code-reviewer re-review found no blocking issues after locked request transitions, marker-based role mapping, and admin-registration reject guard were added.
+- Regression coverage includes display-name role smuggling, server-controlled admin request marker, logged-out forgot-PIN rejection, authenticated PIN change binding, wrong PIN request type rejection, and pending request row locking.
+
 ## Global Validation Gates
 
 - [x] Backend tests cover STAFF/ADMIN/ROOT_ADMIN route matrix.
 - [x] Backend tests prove unknown or unlisted management `/api/**` routes are not STAFF-accessible.
-- [ ] Backend tests cover admin smuggling and PIN reset takeover regressions.
-- [ ] Backend tests cover unauthenticated forgot-PIN rejection and authenticated PIN change binding.
+- [x] Backend tests cover admin smuggling and PIN reset takeover regressions.
+- [x] Backend tests cover unauthenticated forgot-PIN rejection and authenticated PIN change binding.
 - [ ] Backend config tests cover non-local fail-fast secrets and safe local profile startup.
 - [ ] Backend tests cover checkout server-side pricing and append total.
 - [ ] Backend tests cover payment mismatch, cash over-tender, and append addon payment amount.
