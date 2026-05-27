@@ -55,6 +55,13 @@ public class CardController {
     @Autowired
     private OrderCheckoutService orderCheckoutService;
 
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<?> handleException(Exception e) {
+        java.io.StringWriter sw = new java.io.StringWriter();
+        e.printStackTrace(new java.io.PrintWriter(sw));
+        return ResponseEntity.status(500).body(Map.of("message", e.getMessage() != null ? e.getMessage() : "Unknown Error", "stackTrace", sw.toString()));
+    }
+
     @GetMapping
     public ResponseEntity<List<ServiceCard>> getAllCards() {
         return ResponseEntity.ok(cardRepository.findAll());

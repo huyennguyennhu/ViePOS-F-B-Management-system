@@ -94,6 +94,12 @@ export default function PosSalesPage() {
     displayId?: string;
   }>({ open: false, title: '', message: '' });
 
+  const [errorDialog, setErrorDialog] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+  }>({ open: false, title: '', message: '' });
+
   // State cho Popup hết thẻ
   const [noCardDialog, setNoCardDialog] = useState(false);
 
@@ -155,6 +161,11 @@ export default function PosSalesPage() {
     
     if (!lockedCardNumber && serveType === 'dine_in' && freeCards.length === 0) {
       setNoCardDialog(true);
+      return;
+    }
+
+    if (selectedProduct && quantity > (selectedProduct.currentStock || 0)) {
+      alert(`Số lượng không được vượt quá tồn kho hiện tại (${selectedProduct.currentStock || 0})`);
       return;
     }
 
@@ -252,6 +263,12 @@ export default function PosSalesPage() {
       return;
     }
 
+    const currentStock = selectedProduct.currentStock || 0;
+    if (quantity > currentStock) {
+      alert(`Số lượng không được vượt quá tồn kho hiện tại (${currentStock})`);
+      return;
+    }
+
     const newItem: CartItem = {
       id: Date.now().toString() + Math.random().toString(36).substring(7),
       product: selectedProduct,
@@ -274,7 +291,14 @@ export default function PosSalesPage() {
   const updateCartItemQuantity = (id: string, delta: number) => {
     setCartItems(prev => prev.map(item => {
       if (item.id === id) {
-        const newQuantity = Math.max(1, item.quantity + delta);
+        const currentStock = item.product.currentStock || 0;
+        let newQuantity = item.quantity + delta;
+        if (delta > 0 && newQuantity > currentStock) {
+          setErrorDialog({ open: true, title: 'Cảnh báo', message: `Sản phẩm ${item.product.name} chỉ còn ${currentStock}` });
+          newQuantity = currentStock;
+        } else {
+          newQuantity = Math.max(1, newQuantity);
+        }
         const basePrice = posUnitPrice(item.product, item.serveType, item.duration);
         return { ...item, quantity: newQuantity, price: basePrice };
       }
@@ -395,11 +419,13 @@ export default function PosSalesPage() {
         creator: localStorage.getItem('staffEmail') || 'Unknown'
       });
       localStorage.setItem('pos_order_history', JSON.stringify(orderHistory));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Lỗi khi tạo phiên thẻ:', err);
+      const errMsg = err.response?.data?.stackTrace || err.response?.data?.message || err.message;
+      prompt(`Lỗi backend khi tạo phiên thẻ. Hãy COPY nội dung bên dưới và gửi cho tớ:`, errMsg);
+      setIsSubmitting(false);
+      return;
     }
-    
-    setIsSubmitting(false);
     setSuccessDialog({
       open: true,
       title: 'Tạo Đơn Thành Công!',
@@ -590,8 +616,12 @@ export default function PosSalesPage() {
           paymentImage: paymentMethod === 'transfer' ? paymentImage : null,
           items: mapCartItemsForApi(cartItems),
         });
-      } catch (err) {
+      } catch (err: any) {
         console.error('Lỗi khi tạo đơn mang đi trên backend:', err);
+        const errMsg = err.response?.data?.stackTrace || err.response?.data?.message || err.message;
+        prompt(`Lỗi backend khi tạo đơn mang đi. Hãy COPY nội dung bên dưới và gửi cho tớ:`, errMsg);
+        setIsSubmitting(false);
+        return;
       }
       
       orderHistory.push({
@@ -841,13 +871,22 @@ export default function PosSalesPage() {
                   <button 
                     className="pos-quantity-btn" 
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    disabled={quantity <= 1}
                   >
                     <Minus size={14} color={quantity <= 1 ? 'rgba(255,255,255,0.5)' : '#fff'} />
                   </button>
                   <span className="pos-quantity-text">{quantity}</span>
                   <button 
                     className="pos-quantity-btn"
-                    onClick={() => setQuantity(quantity + 1)}
+                    onClick={() => {
+                      const maxStock = selectedProduct.currentStock || 0;
+                      if (quantity >= maxStock) {
+                        setErrorDialog({ open: true, title: 'Cảnh báo', message: `Sản phẩm ${selectedProduct.name} chỉ còn ${maxStock}` });
+                      } else {
+                        setQuantity(quantity + 1);
+                      }
+                    }}
+                    style={{ opacity: quantity >= (selectedProduct.currentStock || 0) ? 0.5 : 1 }}
                   >
                     <Plus size={14} color="#fff" />
                   </button>
@@ -990,6 +1029,7 @@ export default function PosSalesPage() {
                               className="pos-quantity-btn" 
                               onClick={() => updateCartItemQuantity(item.id, -1)}
                               style={{ width: '24px', height: '24px', borderRadius: '4px' }}
+                              disabled={item.quantity <= 1}
                             >
                               <Minus size={14} color={item.quantity <= 1 ? 'rgba(255,255,255,0.5)' : '#fff'} />
                             </button>
@@ -997,7 +1037,7 @@ export default function PosSalesPage() {
                             <button 
                               className="pos-quantity-btn"
                               onClick={() => updateCartItemQuantity(item.id, 1)}
-                              style={{ width: '24px', height: '24px', borderRadius: '4px' }}
+                              style={{ width: '24px', height: '24px', borderRadius: '4px', opacity: item.quantity >= (item.product.currentStock || 0) ? 0.5 : 1 }}
                             >
                               <Plus size={14} color="#fff" />
                             </button>
@@ -1111,6 +1151,30 @@ export default function PosSalesPage() {
             <div className="pos-confirm-actions">
               <button className="pos-confirm-cancel" onClick={() => setNoCardDialog(false)}>Hủy</button>
               <button className="pos-confirm-ok" onClick={() => navigate('/pos/tables')}>Đến thẻ bàn</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Error Dialog */}
+      {errorDialog.open && (
+        <div className="pos-confirm-overlay">
+          <div className="pos-confirm-box" onClick={(e) => e.stopPropagation()}>
+            <div className="pos-success-icon-wrapper" style={{ backgroundColor: 'rgba(211, 47, 47, 0.1)' }}>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM13 17H11V15H13V17ZM13 13H11V7H13V13Z" fill="#d32f2f"/>
+              </svg>
+            </div>
+            <h3 className="pos-success-dialog-title" style={{ color: '#d32f2f' }}>{errorDialog.title}</h3>
+            <p className="pos-confirm-message">{errorDialog.message}</p>
+            <div className="pos-confirm-actions">
+              <button 
+                className="pos-confirm-ok" 
+                style={{ width: '100%', backgroundColor: '#d32f2f' }} 
+                onClick={() => setErrorDialog({ open: false, title: '', message: '' })}
+              >
+                Đóng
+              </button>
             </div>
           </div>
         </div>

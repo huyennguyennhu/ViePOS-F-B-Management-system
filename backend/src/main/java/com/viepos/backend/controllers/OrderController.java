@@ -49,17 +49,21 @@ public class OrderController {
     @Value("${store.code:HCM01}")
     private String storeCode;
 
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<?> handleException(Exception e) {
+        java.io.StringWriter sw = new java.io.StringWriter();
+        e.printStackTrace(new java.io.PrintWriter(sw));
+        return ResponseEntity.status(500).body(Map.of("message", e.getMessage() != null ? e.getMessage() : "Unknown Error", "stackTrace", sw.toString()));
+    }
+
     @GetMapping("/next-id")
     public ResponseEntity<?> getNextOrderId() {
         String datePart = LocalDate.now().format(DateTimeFormatter.ofPattern("yyMMdd"));
+        String timePart = LocalTime.now().format(DateTimeFormatter.ofPattern("HHmmss"));
         String prefix = storeCode + "-" + datePart + "-";
 
-        LocalDateTime startOfDay = LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
-        LocalDateTime endOfDay = LocalDateTime.of(LocalDate.now(), LocalTime.MAX);
-
-        long todayCount = orderReadService.countOrdersTodayWithPrefix(prefix, startOfDay, endOfDay);
-        long nextSeq = todayCount + 1;
-        String sequence = String.format("%04d", nextSeq);
+        // Sử dụng giờ phút giây làm chuỗi ngẫu nhiên duy nhất cho đơn hàng
+        String sequence = timePart;
         String orderCode = prefix + sequence;
 
         return ResponseEntity.ok(Map.of(
