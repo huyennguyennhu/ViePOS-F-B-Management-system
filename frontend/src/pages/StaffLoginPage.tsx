@@ -218,11 +218,11 @@ export default function StaffLoginPage() {
           </div>
 
           <div className="staff-options-row">
-            <label className="staff-fast-login">
+            {/* <label className="staff-fast-login">
               <input type="checkbox" />
               <span>Đăng nhập nhanh</span>
-            </label>
-            <span onClick={() => setIsForgotModalOpen(true)} className="staff-forgot-pin" style={{ cursor: 'pointer' }}>Quên Mã PIN?</span>
+            </label> */}
+            <span onClick={() => setIsForgotModalOpen(true)} className="staff-forgot-pin" style={{ cursor: 'pointer', marginLeft: 'auto' }}>Quên Mã PIN?</span>
           </div>
 
           <button type="submit" className="staff-submit-btn" disabled={isSubmitting}>

@@ -33,7 +33,7 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/ping", "/error").permitAll()
-                .requestMatchers("/api/auth/login").permitAll()
+                .requestMatchers("/api/auth/login", "/api/auth/admin/register").permitAll()
                 .requestMatchers("/api/staff/login", "/api/staff/register").permitAll()
                 // Tự phục vụ PIN (POS)
                 .requestMatchers(
@@ -41,27 +41,27 @@ public class SecurityConfig {
                         "/api/staff/pin-change-request",
                         "/api/staff/forgot-pin"
                 ).hasRole("STAFF")
-                // Quản lý — không cho STAFF
+                // Quản lý — Tạm thời cấp quyền cho STAFF (Manager/Cashier) để hỗ trợ phân quyền frontend
                 .requestMatchers(
                         "/api/staff/all",
                         "/api/staff/pending",
                         "/api/staff/history/**",
                         "/api/staff/pin-change-requests/**",
                         "/api/staff/pin-reset-requests/**"
-                ).hasAnyRole("ADMIN", "ROOT_ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/api/staff/*/approve").hasAnyRole("ADMIN", "ROOT_ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/api/staff/*/reject").hasAnyRole("ADMIN", "ROOT_ADMIN")
-                .requestMatchers(HttpMethod.POST, "/api/staff").hasAnyRole("ADMIN", "ROOT_ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/api/staff/*").hasAnyRole("ADMIN", "ROOT_ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/api/staff/*").hasAnyRole("ADMIN", "ROOT_ADMIN")
-                .requestMatchers("/api/inventory/**").hasAnyRole("ADMIN", "ROOT_ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/api/orders/*/status").hasAnyRole("ADMIN", "ROOT_ADMIN")
-                .requestMatchers(HttpMethod.POST, "/api/products").hasAnyRole("ADMIN", "ROOT_ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/api/products/*").hasAnyRole("ADMIN", "ROOT_ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/api/products/*").hasAnyRole("ADMIN", "ROOT_ADMIN")
-                .requestMatchers(HttpMethod.POST, "/api/categories").hasAnyRole("ADMIN", "ROOT_ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/api/categories/*").hasAnyRole("ADMIN", "ROOT_ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/api/categories/*").hasAnyRole("ADMIN", "ROOT_ADMIN")
+                ).hasAnyRole("STAFF", "ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/staff/*/approve").hasAnyRole("STAFF", "ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/staff/*/reject").hasAnyRole("STAFF", "ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/staff").hasAnyRole("STAFF", "ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/staff/*").hasAnyRole("STAFF", "ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/staff/*").hasAnyRole("STAFF", "ADMIN", "ROOT_ADMIN")
+                .requestMatchers("/api/inventory/**").hasAnyRole("STAFF", "ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/orders/*/status").hasAnyRole("STAFF", "ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/products").hasAnyRole("STAFF", "ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/products/*").hasAnyRole("STAFF", "ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/products/*").hasAnyRole("STAFF", "ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/categories").hasAnyRole("STAFF", "ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/categories/*").hasAnyRole("STAFF", "ADMIN", "ROOT_ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/categories/*").hasAnyRole("STAFF", "ADMIN", "ROOT_ADMIN")
                 // POS + đọc dữ liệu: STAFF, ADMIN, ROOT_ADMIN (đã đăng nhập)
                 .anyRequest().authenticated()
             )

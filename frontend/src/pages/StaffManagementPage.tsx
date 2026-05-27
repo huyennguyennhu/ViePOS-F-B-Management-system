@@ -33,6 +33,16 @@ export default function StaffManagementPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [listHasLoaded, setListHasLoaded] = useState(false);
 
+  const currentUserRole = localStorage.getItem("role") || "STAFF";
+  const canModifyStaff = (targetRole: string | undefined) => {
+    if (currentUserRole === "ROOT_ADMIN") return true;
+    if (currentUserRole === "ADMIN") {
+      const roleName = targetRole || "";
+      return roleName !== "Quản lý" && roleName !== "ADMIN" && roleName !== "ROOT_ADMIN";
+    }
+    return false;
+  };
+
   // Determine active tab based on URL path
   const getActiveTab = () => {
     if (location.pathname.includes("/staff/pending")) return "pending";
@@ -73,6 +83,12 @@ export default function StaffManagementPage() {
   const [pendingSubTab, setPendingSubTab] = useState<
     "accounts" | "pins" | "resets"
   >("accounts");
+
+  useEffect(() => {
+    if (location.state?.pendingSubTab) {
+      setPendingSubTab(location.state.pendingSubTab);
+    }
+  }, [location.state]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Tab 3 Data
@@ -522,13 +538,13 @@ export default function StaffManagementPage() {
                   <input
                     type="checkbox"
                     checked={
-                      filtered.length > 0 &&
-                      selectedListIds.length === filtered.length
+                      filtered.filter(s => canModifyStaff(s.role)).length > 0 &&
+                      selectedListIds.length === filtered.filter(s => canModifyStaff(s.role)).length
                     }
                     onChange={(e) =>
                       toggleSelectListAll(
                         e.target.checked,
-                        filtered.map((s) => s.id)
+                        filtered.filter(s => canModifyStaff(s.role)).map((s) => s.id)
                       )
                     }
                     className="custom-checkbox"
@@ -555,12 +571,14 @@ export default function StaffManagementPage() {
               {filtered.map((staff) => (
                 <tr key={staff.id} className="hoverable-row">
                   <td style={{ textAlign: "center" }}>
-                    <input
-                      type="checkbox"
-                      checked={selectedListIds.includes(staff.id)}
-                      onChange={() => toggleSelectListOne(staff.id)}
-                      className="custom-checkbox"
-                    />
+                    {canModifyStaff(staff.role) && (
+                      <input
+                        type="checkbox"
+                        checked={selectedListIds.includes(staff.id)}
+                        onChange={() => toggleSelectListOne(staff.id)}
+                        className="custom-checkbox"
+                      />
+                    )}
                   </td>
                   <td style={{ textAlign: "center" }}>
                     <div className="staff-avatar-placeholder">
@@ -593,20 +611,24 @@ export default function StaffManagementPage() {
                       >
                         <Eye size={16} />
                       </button>
-                      <button
-                        className="btn-icon-action"
-                        title="Chỉnh sửa"
-                        onClick={() => openEditStaffModal(staff)}
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button
-                        className="btn-icon-action delete"
-                        title="Xóa"
-                        onClick={() => openDeleteModal(staff)}
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {canModifyStaff(staff.role) && (
+                        <>
+                          <button
+                            className="btn-icon-action"
+                            title="Chỉnh sửa"
+                            onClick={() => openEditStaffModal(staff)}
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button
+                            className="btn-icon-action delete"
+                            title="Xóa"
+                            onClick={() => openDeleteModal(staff)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -741,6 +763,7 @@ export default function StaffManagementPage() {
                 <th>Họ và Tên</th>
                 <th>Email</th>
                 <th>Số điện thoại</th>
+                <th>Vai trò yêu cầu</th>
                 <th>Hành động</th>
               </tr>
             </thead>
@@ -758,6 +781,11 @@ export default function StaffManagementPage() {
                   <td className="staff-name">{staff.name}</td>
                   <td>{staff.email}</td>
                   <td>{staff.phone}</td>
+                  <td>
+                    <span className="status-badge safe" style={{ backgroundColor: staff.role === 'ADMIN' ? '#e3f2fd' : '#f0f8ec', color: staff.role === 'ADMIN' ? '#1976d2' : '#256E05' }}>
+                      {staff.role === 'ADMIN' ? 'Quản lý' : 'Nhân viên'}
+                    </span>
+                  </td>
                   <td>
                     <div style={{ display: "flex", gap: "8px" }}>
                       <button
@@ -1423,15 +1451,21 @@ export default function StaffManagementPage() {
               style={{ justifyContent: "flex-end" }}
             >
               {/* <button className="btn-cancel" onClick={() => setIsViewStaffModalOpen(false)}>Đóng</button> */}
-              <button
-                className="btn-save"
-                onClick={() => {
-                  setIsViewStaffModalOpen(false);
-                  openEditStaffModal(viewingStaff);
-                }}
-              >
-                CHỈNH SỬA
-              </button>
+              {canModifyStaff(viewingStaff.role) ? (
+                <button
+                  className="btn-save"
+                  onClick={() => {
+                    setIsViewStaffModalOpen(false);
+                    openEditStaffModal(viewingStaff);
+                  }}
+                >
+                  CHỈNH SỬA
+                </button>
+              ) : (
+                <button className="btn-cancel" onClick={() => setIsViewStaffModalOpen(false)}>
+                  ĐÓNG
+                </button>
+              )}
             </div>
           </div>
         </div>

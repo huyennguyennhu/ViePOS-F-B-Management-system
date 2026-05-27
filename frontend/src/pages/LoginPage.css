@@ -111,18 +111,40 @@
   cursor: not-allowed;
 }
 
+.login-options-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.login-fast-login {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #555;
+  cursor: pointer;
+}
+
 .forgot-password {
-  text-align: center;
-  margin-top: 1rem;
+  text-align: right;
+  margin-top: 0;
 }
 
 .forgot-password a {
-  color: #4CAF50;
-  font-size: 0.9rem;
-  font-weight: 600;
-  text-decoration: underline;
+  color: #555;
+  font-weight: 500;
+  text-decoration: none;
 }
 
 .forgot-password a:hover {
-  color: #2E5F2B;
+  color: #256E05;
+}
+
+.login-footer {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 0.9rem;
+  color: #555;
 }

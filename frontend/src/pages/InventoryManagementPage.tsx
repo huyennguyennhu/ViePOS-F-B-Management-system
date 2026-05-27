@@ -144,7 +144,7 @@ export default function InventoryManagementPage() {
   const [statusFilter, setStatusFilter] = useState('Tất cả trạng thái kho');
 
   const [inventoryData, setInventoryData] = useState<InventoryProduct[]>([]);
-  const [, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     fetchProducts();
@@ -705,8 +705,10 @@ export default function InventoryManagementPage() {
               </div>
 
               <div className="review-modal-actions">
-                <button className="btn-review-back" onClick={handleBackFromReview}>QUAY LẠI</button>
-                <button className="btn-review-confirm" onClick={handleConfirmSave}>XÁC NHẬN LƯU</button>
+                <button className="btn-review-back" onClick={handleBackFromReview} disabled={isLoading}>QUAY LẠI</button>
+                <button className="btn-review-confirm" onClick={handleConfirmSave} disabled={isLoading}>
+                  {isLoading ? 'ĐANG LƯU...' : 'XÁC NHẬN LƯU'}
+                </button>
               </div>
             </div>
           </div>

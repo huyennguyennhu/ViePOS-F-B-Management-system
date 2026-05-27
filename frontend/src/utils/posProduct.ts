@@ -12,6 +12,7 @@ export interface PosProduct {
   pricePackage4h: number;
   pricePackageFullday: number;
   isCustomPrice?: boolean;
+  currentStock: number;
 }
 
 export function parseApiNumber(value: unknown): number {
@@ -35,6 +36,7 @@ export function mapPosProduct(raw: Record<string, unknown>): PosProduct {
     pricePackage4h: parseApiNumber(raw.pricePackage4h),
     pricePackageFullday: parseApiNumber(raw.pricePackageFullday),
     isCustomPrice: Boolean(raw.isCustomPrice),
+    currentStock: parseApiNumber(raw.currentStock),
   };
 }
 

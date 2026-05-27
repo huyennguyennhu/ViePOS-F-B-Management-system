@@ -774,27 +774,35 @@ export default function PosSalesPage() {
           <div className="pos-empty">Không tìm thấy sản phẩm nào.</div>
         ) : (
           <div className="pos-product-grid">
-            {filteredProducts.map(product => (
-              <div 
-                key={product.id} 
-                className="pos-product-card"
-                onClick={() => handleProductClick(product)}
-              >
+            {filteredProducts.map(product => {
+              const isOutOfStock = product.currentStock <= 0;
+              return (
                 <div 
-                  className="pos-product-img"
-                  style={!product.imageUrl ? { backgroundColor: 'rgba(192, 192, 192, 1)' } : {}}
+                  key={product.id} 
+                  className={`pos-product-card ${isOutOfStock ? 'out-of-stock' : ''}`}
+                  onClick={() => {
+                    if (!isOutOfStock) handleProductClick(product);
+                  }}
                 >
-                  {product.imageUrl ? (
-                    <img src={product.imageUrl} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <span className="pos-product-initials">{getInitials(product.name)}</span>
-                  )}
+                  <div 
+                    className="pos-product-img"
+                    style={!product.imageUrl ? { backgroundColor: 'rgba(192, 192, 192, 1)' } : {}}
+                  >
+                    {product.imageUrl ? (
+                      <img src={product.imageUrl} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <span className="pos-product-initials">{getInitials(product.name)}</span>
+                    )}
+                    {isOutOfStock && (
+                      <div className="pos-out-of-stock-overlay">Hết hàng</div>
+                    )}
+                  </div>
+                  <div className="pos-product-info">
+                    <div>{product.name}</div>
+                  </div>
                 </div>
-                <div className="pos-product-info">
-                  <div>{product.name}</div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

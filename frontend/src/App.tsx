@@ -22,6 +22,7 @@ import CategoryListPage from './pages/CategoryListPage';
 import OrderManagementPage from './pages/OrderManagementPage';
 import TableManagementPage from './pages/TableManagementPage';
 import SettingsPage from './pages/SettingsPage';
+import AdminRegisterPage from './pages/AdminRegisterPage';
 import AdminRoute from './components/AdminRoute';
 import PosRoute from './components/PosRoute';
 
@@ -32,6 +33,7 @@ function App() {
         <Route element={<AuthLayout />}>
           <Route path="/" element={<RoleSelectionPage />} />
           <Route path="/login/manager" element={<LoginPage />} />
+          <Route path="/register/manager" element={<AdminRegisterPage />} />
         </Route>
         
         {/* Mobile-first staff pages */}

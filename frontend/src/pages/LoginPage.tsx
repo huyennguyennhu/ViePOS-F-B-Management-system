@@ -95,12 +95,22 @@ export default function LoginPage() {
 
         {error && <p className="login-error">{error}</p>}
 
+        <div className="login-options-row">
+          {/* <label className="login-fast-login">
+            <input type="checkbox" />
+            <span>Đăng nhập nhanh</span>
+          </label> */}
+          <div className="forgot-password" style={{ marginLeft: 'auto' }}>
+            <Link to="/forgot-password">Quên mật khẩu?</Link>
+          </div>
+        </div>
+
         <button type="submit" className="login-btn" disabled={loading}>
           {loading ? 'Đang xử lý...' : 'Đăng Nhập'}
         </button>
 
-        <div className="forgot-password">
-          <Link to="/forgot-password">Quên Mật khẩu?</Link>
+        <div className="login-footer">
+          Chưa có tài khoản? <Link to="/register/manager" style={{ color: '#256E05', fontWeight: 600, textDecoration: 'none' }}>Đăng Ký</Link>
         </div>
       </form>
     </div>

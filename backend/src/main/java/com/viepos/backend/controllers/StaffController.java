@@ -107,11 +107,18 @@ public class StaffController {
 
     private Map<String, Object> mapRequestToOldStruct(AccountRequest req, String status) {
         Map<String, Object> map = new HashMap<>();
+        String fullName = req.getRequestFullName() != null ? req.getRequestFullName() : (req.getEmployee() != null ? req.getEmployee().getFullName() : "");
+        String roleStr = "STAFF";
+        if (fullName.endsWith(" [ADMIN]")) {
+            fullName = fullName.substring(0, fullName.length() - 8).trim();
+            roleStr = "ADMIN";
+        }
+        
         map.put("id", req.getId().toString());
-        map.put("name", req.getRequestFullName() != null ? req.getRequestFullName() : (req.getEmployee() != null ? req.getEmployee().getFullName() : ""));
+        map.put("name", fullName);
         map.put("email", req.getRequestEmail() != null ? req.getRequestEmail() : "");
         map.put("phone", req.getRequestPhone() != null ? req.getRequestPhone() : "");
-        map.put("role", "STAFF");
+        map.put("role", roleStr);
         map.put("status", status);
         map.put("createdAt", ApiDateTime.toVietnamOffset(req.getCreatedAt()));
         
@@ -187,13 +194,20 @@ public class StaffController {
             if (req.getStatus() != RequestStatus.PENDING) {
                 return ResponseEntity.status(400).body(Map.of("message", "Yêu cầu này đã được xử lý."));
             }
+            User currentUser = getCurrentUser();
+            if (currentUser != null && currentUser.getEmployee() != null) {
+                if (currentUser.getEmployee().getRole() == EmployeeRole.ADMIN) {
+                    if (req.getEmployee() != null && (req.getEmployee().getRole() == EmployeeRole.ADMIN || req.getEmployee().getRole() == EmployeeRole.ROOT_ADMIN)) {
+                        return ResponseEntity.status(403).body(Map.of("message", "Bạn không có quyền duyệt yêu cầu của Quản lý khác."));
+                    }
+                }
+            }
             if (userRepository.existsByEmail(req.getRequestEmail())) {
                 return ResponseEntity.status(400).body(Map.of("message", "Email này đã tồn tại trong hệ thống."));
             }
             if (employeeRepository.existsByPhone(req.getRequestPhone())) {
                 return ResponseEntity.status(400).body(Map.of("message", "Số điện thoại này đã tồn tại trong hệ thống."));
             }
-            User currentUser = getCurrentUser();
             if (currentUser != null && currentUser.getEmployee() != null) {
                 req.setApprovedBy(currentUser.getEmployee());
             }
@@ -201,12 +215,19 @@ public class StaffController {
             req.setApprovedAt(LocalDateTime.now());
             requestRepository.save(req);
 
+            String fullName = req.getRequestFullName();
+            EmployeeRole newRole = EmployeeRole.STAFF;
+            if (fullName != null && fullName.endsWith(" [ADMIN]")) {
+                fullName = fullName.substring(0, fullName.length() - 8).trim();
+                newRole = EmployeeRole.ADMIN;
+            }
+
             Employee emp = new Employee();
             emp.setEmployeeId("EMP" + System.currentTimeMillis());
-            emp.setFullName(req.getRequestFullName());
+            emp.setFullName(fullName);
             emp.setPersonalEmail(req.getRequestEmail());
             emp.setPhone(req.getRequestPhone());
-            emp.setRole(EmployeeRole.STAFF);
+            emp.setRole(newRole);
             emp.setStatus(EmployeeStatus.ACTIVE);
             employeeRepository.save(emp);
 
@@ -235,6 +256,11 @@ public class StaffController {
             }
             User currentUser = getCurrentUser();
             if (currentUser != null && currentUser.getEmployee() != null) {
+                if (currentUser.getEmployee().getRole() == EmployeeRole.ADMIN) {
+                    if (req.getEmployee() != null && (req.getEmployee().getRole() == EmployeeRole.ADMIN || req.getEmployee().getRole() == EmployeeRole.ROOT_ADMIN)) {
+                        return ResponseEntity.status(403).body(Map.of("message", "Bạn không có quyền từ chối yêu cầu của Quản lý khác."));
+                    }
+                }
                 req.setApprovedBy(currentUser.getEmployee());
             }
             req.setStatus(RequestStatus.REJECTED);
@@ -363,7 +389,7 @@ public class StaffController {
 
     @GetMapping("/all")
     public ResponseEntity<List<Map<String, Object>>> getAllStaff() {
-        List<Map<String, Object>> staff = userRepository.findAllWithEmployeeByRole(EmployeeRole.STAFF).stream()
+        List<Map<String, Object>> staff = userRepository.findAllWithEmployeeOrderByFullNameAsc().stream()
                 .map(u -> mapUserToOldStruct(u, null))
                 .collect(Collectors.toList());
         return ResponseEntity.ok(staff);
@@ -399,6 +425,11 @@ public class StaffController {
             }
             User currentUser = getCurrentUser();
             if (currentUser != null && currentUser.getEmployee() != null) {
+                if (currentUser.getEmployee().getRole() == EmployeeRole.ADMIN) {
+                    if (req.getEmployee() != null && (req.getEmployee().getRole() == EmployeeRole.ADMIN || req.getEmployee().getRole() == EmployeeRole.ROOT_ADMIN)) {
+                        return ResponseEntity.status(403).body(Map.of("message", "Bạn không có quyền duyệt yêu cầu của Quản lý khác."));
+                    }
+                }
                 req.setApprovedBy(currentUser.getEmployee());
             }
             req.setStatus(RequestStatus.APPROVED);
@@ -427,6 +458,11 @@ public class StaffController {
             }
             User currentUser = getCurrentUser();
             if (currentUser != null && currentUser.getEmployee() != null) {
+                if (currentUser.getEmployee().getRole() == EmployeeRole.ADMIN) {
+                    if (req.getEmployee() != null && (req.getEmployee().getRole() == EmployeeRole.ADMIN || req.getEmployee().getRole() == EmployeeRole.ROOT_ADMIN)) {
+                        return ResponseEntity.status(403).body(Map.of("message", "Bạn không có quyền từ chối yêu cầu của Quản lý khác."));
+                    }
+                }
                 req.setApprovedBy(currentUser.getEmployee());
             }
             req.setStatus(RequestStatus.REJECTED);
@@ -485,6 +521,13 @@ public class StaffController {
 
         EmployeeRole empRole = resolveEmployeeRole(roleStr);
 
+        User currentUser = getCurrentUser();
+        if (currentUser != null && currentUser.getEmployee() != null && currentUser.getEmployee().getRole() == EmployeeRole.ADMIN) {
+            if (empRole == EmployeeRole.ADMIN || empRole == EmployeeRole.ROOT_ADMIN) {
+                return ResponseEntity.status(403).body(Map.of("message", "Bạn không có quyền tạo tài khoản Quản lý. Vui lòng liên hệ Root Admin."));
+            }
+        }
+
         Employee emp = new Employee();
         emp.setEmployeeId("EMP" + System.currentTimeMillis());
         emp.setFullName(name);
@@ -519,6 +562,13 @@ public class StaffController {
         }
         User user = userOpt.get();
         Employee emp = user.getEmployee();
+
+        User currentUser = getCurrentUser();
+        if (currentUser != null && currentUser.getEmployee() != null && currentUser.getEmployee().getRole() == EmployeeRole.ADMIN) {
+            if (emp.getRole() == EmployeeRole.ADMIN || emp.getRole() == EmployeeRole.ROOT_ADMIN) {
+                return ResponseEntity.status(403).body(Map.of("message", "Bạn không có quyền chỉnh sửa tài khoản Quản lý khác."));
+            }
+        }
 
         if (body.containsKey("name")) emp.setFullName(body.get("name"));
         if (body.containsKey("phone")) {
@@ -558,6 +608,14 @@ public class StaffController {
         }
         User user = userOpt.get();
         Employee emp = user.getEmployee();
+
+        User currentUser = getCurrentUser();
+        if (currentUser != null && currentUser.getEmployee() != null && currentUser.getEmployee().getRole() == EmployeeRole.ADMIN) {
+            if (emp.getRole() == EmployeeRole.ADMIN || emp.getRole() == EmployeeRole.ROOT_ADMIN) {
+                return ResponseEntity.status(403).body(Map.of("message", "Bạn không có quyền khóa tài khoản Quản lý khác."));
+            }
+        }
+
         emp.setStatus(EmployeeStatus.RESIGNED);
         employeeRepository.save(emp);
         return ResponseEntity.ok(Map.of("message", "Đã vô hiệu hoá tài khoản nhân viên " + emp.getFullName()));
