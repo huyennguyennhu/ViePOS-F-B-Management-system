@@ -3,7 +3,7 @@ title: Security Data Integrity Fix Plan
 description: >-
   Fix critical ViePOS security, authorization, checkout, inventory, and data
   exposure bugs with tests-first phases.
-status: pending
+status: in-progress
 priority: P1
 effort: 5d
 branch: main
@@ -62,6 +62,7 @@ Last updated: 2026-05-28.
 - Phase 3 code is implemented and reviewed. Account/PIN request safety tests pass; frontend forgot-PIN no longer submits logged-out reset data.
 - Phase 4 code is implemented and reviewed. Checkout prices, totals, and payment rows are now server-owned for takeaway, append-items, and card session checkout paths.
 - Phase 4 fixed source: `OrderCheckoutService` resolves prices through `ProductPriceService`, `CheckoutPaymentValidationService` rejects mismatched tender before touched write paths, and card session duration aliases reuse checkout service-type normalization.
+- Phase 5 issue #5 is implemented and reviewed. Manual export now maps to backend `EXPORT`, existing DBs have a non-destructive enum patch, inventory mutations lock products in stable order, and export/sale paths reject negative stock before writes.
 
 ## Phases
 
@@ -71,7 +72,7 @@ Last updated: 2026-05-28.
 | 2 | [Authorization Boundary](./phase-02-authorization-boundary.md) | Completed |
 | 3 | [Account Request and PIN Safety](./phase-03-account-request-and-pin-safety.md) | Completed |
 | 4 | [Checkout Total Ownership](./phase-04-checkout-total-ownership.md) | Completed |
-| 5 | [Inventory and Session Consistency](./phase-05-inventory-and-session-consistency.md) | Pending |
+| 5 | [Inventory and Session Consistency](./phase-05-inventory-and-session-consistency.md) | In Progress |
 | 6 | [Data Exposure and API Contracts](./phase-06-data-exposure-and-api-contracts.md) | Pending |
 | 7 | [Regression Verification](./phase-07-regression-verification.md) | Pending |
 
@@ -168,7 +169,7 @@ Last updated: 2026-05-28.
 - [ ] Backend config tests cover non-local fail-fast secrets and safe local profile startup.
 - [x] Backend tests cover checkout server-side pricing and append total.
 - [x] Backend tests cover payment mismatch, cash over-tender, and append addon payment amount.
-- [ ] Backend tests cover inventory export enum, negative stock rejection, and session double-book guard.
+- [ ] Backend tests cover inventory export enum, negative stock rejection, and session double-book guard. Inventory export and negative stock coverage are complete; session double-book remains for issue #6.
 - [ ] Frontend build/type-check passes after API wrapper changes.
 - [ ] No stack traces or raw secrets in API responses or docs/config.
 - [ ] `git diff` secret scan before commit.

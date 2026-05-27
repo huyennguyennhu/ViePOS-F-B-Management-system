@@ -1,10 +1,11 @@
 ---
 phase: 5
-title: "Inventory and Session Consistency"
-status: pending
+title: Inventory and Session Consistency
+status: in-progress
 priority: P1
-effort: "1d"
-dependencies: [4]
+effort: 1d
+dependencies:
+  - 4
 ---
 
 # Phase 5: Inventory and Session Consistency
@@ -49,10 +50,20 @@ Add inventory mutation guard with lock/conditional update. Add card/session guar
 
 ## Success Criteria
 
-- [ ] Manual export works and records correct transaction type.
-- [ ] Negative stock path is impossible through API.
+- [x] Manual export works and records correct transaction type.
+- [x] Negative stock path is impossible through API.
 - [ ] Double-click/concurrent session start fails safely.
 - [ ] Cancelled orders no longer silently leave inconsistent inventory/session state.
+
+## Issue #5 Evidence
+
+- Backend tests: `cd backend && bash ./mvnw test` passed 42 tests, 0 failures/errors.
+- Code review:
+  - First re-review found executable existing-DB enum patch missing; fixed with `database/000001-add-export-transaction-type.sql`.
+  - Second re-review found validation rollback-only risk; fixed with `@Transactional(noRollbackFor = IllegalArgumentException.class)`.
+  - Final narrow re-review found no blocking findings.
+- Regression coverage includes lowercase `export` mapping to `EXPORT`, decrement greater than stock rejecting before writes, sale deduction rejecting before inventory transaction writes, and checkout preflight preserving 400 behavior for insufficient stock.
+- Operational note: existing databases need `database/000001-add-export-transaction-type.sql` applied before deploying code that writes `EXPORT`.
 
 ## Risk Assessment
 
