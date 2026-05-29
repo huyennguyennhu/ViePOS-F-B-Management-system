@@ -102,6 +102,8 @@ public class SecurityConfig {
             "https://*.web.app",
             "https://vie-pos-f-b-management-system.vercel.app",
             "https://*.vercel.app",
+            "https://viepos-f-b-management-system.pages.dev",
+            "https://*.viepos-f-b-management-system.pages.dev",
             "https://console.cron-job.org",
             "https://*.cron-job.org"
         ));
